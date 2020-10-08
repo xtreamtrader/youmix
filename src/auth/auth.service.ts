@@ -182,6 +182,16 @@ export class AuthService {
   ): Promise<ITokenResult> {
     const hashedRefreshToken = this.hashRefreshToken(refreshToken);
 
+    const { iat, exp } = this.jwtService.decode(refreshToken) as any;
+
+    // Throw error if refreshToekn has already been expired
+    if (exp < +new Date() / 1000) {
+      throw new UnauthorizedException({
+        message: 'This refresh has been expired. Please login again',
+        type: ETokenStatus.REFRESH_TOKEN_EXPIRED,
+      });
+    }
+
     const userId = await this.redisService.getUserIdFromRefreshToken(
       hashedRefreshToken,
     );
@@ -196,8 +206,6 @@ export class AuthService {
     const latestUserUpdatedTime = await this.redisService.getCredentialsUserChangedByUnixTimestamp(
       userId,
     );
-
-    const { iat } = this.jwtService.decode(refreshToken) as any;
 
     if (iat < +latestUserUpdatedTime)
       throw new UnauthorizedException({
