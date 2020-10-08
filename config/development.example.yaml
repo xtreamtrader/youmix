@@ -1,0 +1,29 @@
+db:
+  host: 'localhost'
+  username: 'postgres'
+  password: 'postgres'
+  port: 5432
+  synchronize: true
+
+jwt:
+  secret: 'devsecret'
+  expiresIn: 18000 # test 10s
+  refreshTokenSecret: 'refresh-token-secret'
+  refreshTokenExpiresIn: 360000 # test 30s
+
+
+aws:
+  bucketName: # aws s3 bucket name
+  region: # aws region
+  accessKey: # aws iam accessToken
+  secretAccessKey: # aws iam secret access key
+
+sentry:
+  dsn: #sentry dsn url
+  tracesSampleRate: 1.0
+  debug: false
+
+mailer:
+  mailgun:
+    api_key: # mailgun api key
+    domain: # domain configured in mailgun
