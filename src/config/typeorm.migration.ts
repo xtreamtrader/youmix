@@ -18,10 +18,10 @@ const typeOrmConfig: TypeOrmModuleOptions = {
 
   migrationsTableName: 'migration',
 
-  migrations: ['src/migrations/*.ts'],
+  migrations: ['src/migration/*.ts'],
 
   cli: {
-    migrationsDir: 'src/migrations',
+    migrationsDir: 'src/migration',
   },
 };
 

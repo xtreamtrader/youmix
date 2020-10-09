@@ -11,6 +11,7 @@ import { RedisModule } from './redis/redis.module';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtRedisGuard } from './common/guards/jwtRedis.guard';
 import { SeedsModule } from './seeds/seeds.module';
+import { ProjectModule } from './project/project.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { SeedsModule } from './seeds/seeds.module';
     MailerModule,
     RedisModule,
     SeedsModule,
+    ProjectModule,
   ],
   controllers: [],
   providers: [

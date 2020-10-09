@@ -1,3 +1,5 @@
+import { CreateDateColumn, UpdateDateColumn, DeleteDateColumn, PrimaryGeneratedColumn } from 'typeorm';
+
 /**
  * Replace each field in target by its value from source
  * @param target
@@ -16,4 +18,18 @@ export function assignPartialObjectToEntity<T>(
   });
 
   return affected;
+}
+
+export class BaseEntity {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt: Date;
 }

@@ -73,6 +73,7 @@ export class Profile {
   searchWeights: any;
 
   /** AUTO GENERATED FIELDS */
+  
   @CreateDateColumn()
   createdAt: Date;
 

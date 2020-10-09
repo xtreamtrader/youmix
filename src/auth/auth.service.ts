@@ -184,7 +184,7 @@ export class AuthService {
 
     const { iat, exp } = this.jwtService.decode(refreshToken) as any;
 
-    // Throw error if refreshToekn has already been expired
+    // Throw error if refreshToken has already been expired
     if (exp < +new Date() / 1000) {
       throw new UnauthorizedException({
         message: 'This refresh has been expired. Please login again',
