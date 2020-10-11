@@ -1,4 +1,9 @@
-import { CreateDateColumn, UpdateDateColumn, DeleteDateColumn, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  CreateDateColumn,
+  UpdateDateColumn,
+  DeleteDateColumn,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 /**
  * Replace each field in target by its value from source
@@ -20,7 +25,18 @@ export function assignPartialObjectToEntity<T>(
   return affected;
 }
 
-export class BaseEntity {
+export function BaseModel<T extends boolean>(
+  withId?: T,
+): T extends true ? CTor<BaseEntityWithId> : CTor<BaseEntity>;
+
+export function BaseModel<T extends boolean>(
+  withId?: T,
+): CTor<BaseEntityWithId> | CTor<BaseEntity> {
+  if (withId) return BaseEntityWithId;
+  return BaseEntity;
+}
+
+export class BaseEntityWithId {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -33,3 +49,16 @@ export class BaseEntity {
   @DeleteDateColumn()
   deletedAt: Date;
 }
+
+export class BaseEntity {
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt: Date;
+}
+
+export type CTor<T> = new (...args: any[]) => T;

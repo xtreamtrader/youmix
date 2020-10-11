@@ -20,7 +20,7 @@ export default class ApiFeature<T> {
   // TODO: Refactor into NestJS Module
   private query: SelectQueryBuilder<T>;
   private queryParams: TApiFeaturesDto<T>;
-  private option: IApiFeatureOptions;
+  private option: IApiFeatureOptions = {};
   private reservedFilterFields = ['createdAt', 'deletedAt', 'updatedAt', 'id'];
 
   private limit: number;
