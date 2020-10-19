@@ -53,7 +53,7 @@ export class UserService {
       await this.userRepository.save(newUser);
 
       // Create correspoding Profile
-      await this.profileService.create({}, newUser);
+      await this.profileService.createProfile({}, newUser);
 
       return {
         token: plainToken,

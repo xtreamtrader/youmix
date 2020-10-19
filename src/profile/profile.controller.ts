@@ -29,9 +29,9 @@ export class ProfileController {
 
   @Public()
   @Get('/demo')
-  async getDemoProfiles(): Promise<Profile[]> {
-    return await this.profileService.findAll();
-  }
+  // async getDemoProfiles(): Promise<Profile[]> {
+  //   return await this.profileService.findAll();
+  // }
 
   @Patch()
   async updateOwn(

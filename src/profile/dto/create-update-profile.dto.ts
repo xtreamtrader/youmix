@@ -16,7 +16,7 @@ import {
   ArrayMinSize,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { Achivement } from './achievement.dto';
+import { Achievement } from './achievement.dto';
 import { toCapitalize } from 'src/common/helpers/string.helper';
 
 const profileJobRegex = new RegExp(
@@ -80,8 +80,8 @@ export class CreateOrUpdateProfileDto {
   @ValidateNested({
     each: true,
   })
-  @Type(() => Achivement)
-  achievements?: Achivement[];
+  @Type(() => Achievement)
+  achievements?: Achievement[];
 
   @IsOptional()
   @IsNumber()

@@ -26,7 +26,14 @@ export class IsNumberStringOrArrayConstraint
       !isNaN(value) ||
       (Array.isArray(value) &&
         value.length > 0 &&
-        value.every(e => e !== undefined && e.length > 0 && !isNaN(e)))
+        value.every(
+          e =>
+            typeof e === 'number' ||
+            (e !== undefined &&
+              typeof e === 'string' &&
+              e.length > 0 &&
+              !isNaN(e as any)),
+        ))
     );
   }
 

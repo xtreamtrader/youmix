@@ -8,7 +8,7 @@ import {
   Max,
 } from 'class-validator';
 
-export class Achivement implements IAchievement {
+export class Achievement implements IAchievement {
   @IsString()
   @MinLength(10)
   @MaxLength(50)

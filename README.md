@@ -59,18 +59,56 @@ $ npm run test:cov
 ```
 
 ## Todo
-- [ ] Refactor ApiFeatures (filtering, sorting, pagination,...) into a NestJS module
+- [x] _**Refactor ~~ApiFeatures~~ renamed to ApiCrud (~~filtering, sorting, pagination,...~~ full CRUD supports with role validation, error handler, relations) ~~into a NestJS module~~ used Standalone Typescript Abstract Class instead**_
+  - [ ] Refactor error handler to NestJs Filter Exception Module
 - [ ] Refactor config files into a NestJS Module
 - [ ] Refactor util files into a NestJS Module
 - [ ] Add Swagger for API documentation
-- [ ] Write test -_- 
+- [ ] Write test -\_-
 
 ## In Progress
 
-- [ ] Working on project features
+- [x] ~~Working on project features~~ _**DONE**_
 - [ ] Working on notification features
 - [ ] Working on workplace features
 
+## API Endpoints
+
+| No  | Endpoint | Description | Body | Note |
+| :-: | -------- | ----------- | ---- | ---- |
+| Auth <i>(_)</i>
+| 1 | POST /auth/signup| Create new account | AuthSignUpDto|
+| 2 | POST /auth/signin| Login to retrive accesstoken and refreshtoken | AuthSignInDto|
+| 3 | POST /auth/refreshtoken| Use refreshtoken to get a new access token | RfreshTokenDto|
+| 4 | GET /auth/verification/:userId/:verificationToken| Verify account (to ensure user's email is accessible but its owner) |
+| 5 | POST /auth/resetpassword| Generate a new verification token and send it under a reset link to user's email | RequestResetPasswordDto
+| 6 | POST /auth//verification/:userId/:token| Saving new password after validating for given verification token | ResetPasswordDto
+| User <i>(_)</i>
+| 7 | GET /users| Get all users || Admin only
+| 8 | GET /users/:id| Get user || Admin only
+| 9 | GET /me| Get all users || Owner
+| 10 | PATCH /users/:id | Update user information (password includes) || Admin only
+| 11 | DELETE /users/:id| Delete user || Owner
+| Profile <i>(_)</i>
+| 12 | GET /profiles?[allow_query] | Get all profiles ||
+| 13 | GET /profiles/:username | Get profile by username ||
+| 14 | PATCH /profiles | Update profile || Owner only
+| Project <i>(_)</i>
+| 15 | GET /projects?[allow_query] | Get all projects with owner member || <i>(_) AccessMembersListOption</i>
+| 16 | GET /projects/:id | Get single project with visible members |
+| 17 | POST /projects | Create new project | CreateProjectDto
+| 18 | PATCH /projects/:id | Update exising project | UpdateProjectDto | Owner only
+| 19 | DELETE /projects/:id | Delete existing project | | Owner only
+| ProjectMembers <i>(_)</i>
+| 20 | GET /projects/:id/members?[allow_query] | Get all profile detail of accessable members | | <i>(\*) AccessMembersListOption</i>
+| 21 | GET /projects/:id/members/:username | Get <i>active member</i> of one project with profile data|
+| 22 | POST /projects/:id/members/:username/invite | Invite user to join in the project | | Role: <i>Active member</i>
+| 23 | POST /projects/:id/members/join | Join request from normal user| |
+| 24 | POST /projects/:id/members/accept | Invited user accepts to join the project | |
+| 25 | POST /projects/:id/members/approve | Approve normal user's request to join | | Owner only
+| 26 | POST /projects/:id/members/:username/transfer | Tranfer ownership to user| | Owner only
+| 27 | DELETE /projects/:id/members | Leave project| | All but Owner
+| 28 | DELETE /projects/:id/members/:username | Kick user out of project | | Owner only
 
 ## License
 
