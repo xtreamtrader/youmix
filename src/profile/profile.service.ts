@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Repository, Not, Like, Brackets } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Profile } from './profile.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CreateOrUpdateProfileDto } from './dto/create-update-profile.dto';
@@ -7,24 +7,36 @@ import { assignPartialObjectToEntity } from 'src/common/helpers/entity.helper';
 import { EProfileJob } from './profile.interfaces';
 import { appDefaultPreference } from 'src/config/app.config';
 import { User } from 'src/user/user.entity';
-import ApiFeature from 'src/common/helpers/apiFeatures';
+import ApiCrud from 'src/common/helpers/api-crud';
 import { TApiFeaturesDto, WithMeta } from 'src/common/interfaces/api-features';
 
 @Injectable()
-export class ProfileService {
+export class ProfileService extends ApiCrud<Profile> {
   constructor(
     @InjectRepository(Profile)
     private profileRepository: Repository<Profile>,
-  ) {}
+  ) {
+    super(profileRepository, {
+      alias: 'profile',
+      autoValidateOnUD: false,
+    });
+  }
 
-  async create(
-    { position, bio, ...others }: CreateOrUpdateProfileDto,
+  validateRole(): boolean {
+    return true;
+  }
+
+  triggerOnPreValidation: undefined;
+
+  async createProfile(
+    createOrUpdateProfileDto: CreateOrUpdateProfileDto,
     user: User,
   ): Promise<Profile> {
+    const { position, bio, ...others } = createOrUpdateProfileDto;
     const newProfile = new Profile();
 
     // Set position if undefined
-    if (!position) position = EProfileJob.OTHERS;
+    // if (!position) position = EProfileJob.OTHERS;
 
     if (position !== EProfileJob.STUDENT) {
       delete others.studentId;
@@ -32,12 +44,11 @@ export class ProfileService {
     }
 
     // Set bio if undefined
-    if (!bio) bio = appDefaultPreference.DEFAULT_BIO;
 
     assignPartialObjectToEntity(newProfile, others);
-    newProfile.position = position;
+    newProfile.position = position || EProfileJob.OTHERS;
     newProfile.avatar = appDefaultPreference.DEFAULT_AVATAR;
-    newProfile.bio = bio;
+    newProfile.bio = bio || appDefaultPreference.DEFAULT_BIO;
     newProfile.user = user;
 
     return this.profileRepository.save(newProfile);
@@ -69,24 +80,21 @@ export class ProfileService {
     return profile;
   }
 
-  findAll(): Promise<Profile[]> {
-    return this.profileRepository.find();
-  }
-
   findAllNotMe(
     username: string,
     query: TApiFeaturesDto<Profile>,
   ): Promise<WithMeta<Profile[]>> {
-    return new ApiFeature(
-      this.profileRepository
-        .createQueryBuilder()
-        .where('username != :username ', { username }),
-      query,
+    return this.getManyWithMeta(query, [
+      // {
+      //   andWhere: `username != '${username}'`,
+      // }
       {
-        numericFields: ['yearBorn'],
-        simpleArrayFields: ['expertises'],
-        jsonbFields: ['achievements'],
-      },
-    ).getManyWithMeta();
+        addFrom: 'sd'
+      }
+    ]);
+  }
+
+  findAll(query: TApiFeaturesDto<Profile>): Promise<WithMeta<Profile[]>> {
+    return this.getManyWithMeta(query);
   }
 }

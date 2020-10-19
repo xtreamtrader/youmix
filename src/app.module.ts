@@ -1,3 +1,4 @@
+
 import { Module } from '@nestjs/common';
 import { UserModule } from './user/user.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -12,6 +13,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtRedisGuard } from './common/guards/jwtRedis.guard';
 import { SeedsModule } from './seeds/seeds.module';
 import { ProjectModule } from './project/project.module';
+import { ProjectMemberModule } from './project-member/project-member.module';
 
 @Module({
   imports: [
@@ -25,8 +27,8 @@ import { ProjectModule } from './project/project.module';
     RedisModule,
     SeedsModule,
     ProjectModule,
+    ProjectMemberModule,
   ],
-  controllers: [],
   providers: [
     {
       provide: APP_GUARD,
