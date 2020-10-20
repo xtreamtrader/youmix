@@ -6,6 +6,7 @@ import {
   FindManyOptions,
   FindOneOptions,
   FindConditions,
+  FindOperator,
 } from 'typeorm';
 import { TApiFeaturesDto, WithMeta } from '../interfaces/api-features';
 import {
@@ -248,13 +249,21 @@ export default abstract class ApiCrud<T> {
 
   /**
    * Stringify error object to a more human-readable version
-   * @example { username: 'alice', address: 'lorem'} => 'username: alice adress: lorem'
+   * @example { username: 'alice', address: 'lorem'} => 'username: alice, address: lorem'
    * @param obj
    */
   private stringifyObject(obj: any): string {
     return Object.keys(obj)
-      .reduce((acc, cur) => (acc += `${cur}: ${obj[cur]}, `), '')
-      .trimEnd();
+      .reduce(
+        (acc, cur) =>
+          (acc +=
+            obj[cur] instanceof FindOperator
+              ? `${cur}: ${obj[cur]._value}, `
+              : `${cur}: ${obj[cur]}, `),
+        '',
+      )
+      .trim()
+      .slice(0, -1);
   }
 
   /**
