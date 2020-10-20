@@ -187,8 +187,8 @@ export default abstract class ApiCrud<T> {
       if ((error as any).code === '23503') {
         const errorObj = this.extractConflictErrorFromQueryBuilder(error);
 
-        throw new BadRequestException(
-          `The username ${this.stringifyObject(errorObj)} not found`,
+        throw new NotFoundException(
+          `The ${this.stringifyObject(errorObj)} not found`,
         );
       }
     }
