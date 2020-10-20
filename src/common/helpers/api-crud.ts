@@ -40,7 +40,7 @@ interface IApiCrudOptions {
   autoValidateOnUD?: boolean;
 }
 
-interface IApiCrudValidatorOptions {
+interface IApiCrudValidatorOptions<T = any> {
   /**
    * Override the default autoValidationOnCUD
    */
@@ -55,6 +55,8 @@ interface IApiCrudValidatorOptions {
    * An array of parameters which will be passed into overrided triggerOnPreValidation to get entity from database
    */
   triggerParams?: any[];
+
+  findOneBeforeCreate?: FindConditions<T>;
 
   /**
    * A function which will be executed before the main validate function gets called
@@ -180,7 +182,7 @@ export default abstract class ApiCrud<T> {
         throw new ConflictException(
           `The ${this.alias} having ${this.stringifyObject(
             errorObj,
-          )} already existed`,
+          )} been already existed`,
         );
       }
 
@@ -588,8 +590,19 @@ export default abstract class ApiCrud<T> {
    */
   public async create(
     obj: Partial<T>,
-    validateOptions?: IApiCrudValidatorOptions,
+    validateOptions?: IApiCrudValidatorOptions<T>,
   ): Promise<T> {
+    const { findOneBeforeCreate } = validateOptions;
+    if (findOneBeforeCreate) {
+      await this.findOneByConditions(validateOptions.findOneBeforeCreate);
+
+      throw new ConflictException(
+        `The ${this.alias} having ${this.stringifyObject(
+          findOneBeforeCreate,
+        )} been already existed`,
+      );
+    }
+
     if (validateOptions?.hasRoleValidator) {
       if (!this.triggerOnPreValidation) return;
 
