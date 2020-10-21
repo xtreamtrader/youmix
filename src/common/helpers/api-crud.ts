@@ -56,6 +56,11 @@ interface IApiCrudValidatorOptions<T = any> {
    */
   triggerParams?: any[];
 
+  /**
+   * Perform a findOne operator before execute create method
+   *
+   * Throw ConflictError if found
+   */
   findOneBeforeCreate?: FindConditions<T>;
 
   /**
@@ -228,13 +233,21 @@ export default abstract class ApiCrud<T> {
     entity: T,
     validateOptions: IApiCrudValidatorOptions,
   ): Promise<void> {
-    if (!this.autoValidationOnUD && !validateOptions.hasRoleValidator) return;
+    if (
+      validateOptions.hasRoleValidator !== undefined &&
+      !validateOptions.hasRoleValidator
+    )
+      return;
+    if (!this.autoValidationOnUD) return;
 
     const { preValidator, postValidator } = validateOptions;
 
     if (preValidator) preValidator();
 
-    if (this.triggerOnPreValidation) {
+    if (
+      this.triggerOnPreValidation &&
+      validateOptions.triggerParams?.length > 0
+    ) {
       entity = await this.triggerOnPreValidation.call(
         this,
         ...validateOptions.triggerParams,
@@ -592,26 +605,33 @@ export default abstract class ApiCrud<T> {
     obj: Partial<T>,
     validateOptions?: IApiCrudValidatorOptions<T>,
   ): Promise<T> {
-    const { findOneBeforeCreate } = validateOptions;
-    if (findOneBeforeCreate) {
-      await this.findOneByConditions(validateOptions.findOneBeforeCreate);
-
-      throw new ConflictException(
-        `The ${this.alias} having ${this.stringifyObject(
-          findOneBeforeCreate,
-        )} been already existed`,
-      );
-    }
-
     if (validateOptions?.hasRoleValidator) {
       if (!this.triggerOnPreValidation) return;
 
       await this.validateRoleHandler(null, validateOptions);
     }
 
-    return this.repository
-      .save(obj as any)
-      .catch(error => this.filterError(error));
+    try {
+      if (validateOptions?.findOneBeforeCreate) {
+        await this.findOneByConditions(validateOptions.findOneBeforeCreate);
+
+        throw new ConflictException(
+          `The ${this.alias} having ${this.stringifyObject(
+            validateOptions.findOneBeforeCreate,
+          )} been already existed`,
+        );
+      }
+
+      return this.repository
+        .save(obj as any)
+        .catch(error => this.filterError(error));
+    } catch (error) {
+      if (error instanceof ConflictException) throw error;
+
+      return this.repository
+        .save(obj as any)
+        .catch(error => this.filterError(error));
+    }
   }
 
   /**
@@ -650,10 +670,16 @@ export default abstract class ApiCrud<T> {
     conditions?: FindConditions<T>,
     options?: FindOneOptions<T>,
     validateOptions?: IApiCrudValidatorOptions,
+    deleteOption?: {
+      softDelete?: boolean;
+    },
   ): Promise<void> {
     const record = await this.findOneByConditions(conditions, options);
-
+    
     await this.validateRoleHandler(record, validateOptions);
+
+    if (!deleteOption?.softDelete)
+      return this.repository.delete(conditions).catch(this.filterError) as any;
 
     return this.repository
       .softDelete(conditions)
@@ -715,7 +741,15 @@ export default abstract class ApiCrud<T> {
     queryParams: TApiFeaturesDto<T>,
     extendFromQueries?: TExtendFromQueries<T>,
   ): Promise<T> {
+    const { limit, page, sort, search, ...conditions } = queryParams;
     const query = this.createQuery(queryParams, extendFromQueries);
-    return query.getOne();
+    const result = await query.getOne();
+
+    if (!result)
+      throw new NotFoundException(
+        `No ${this.alias} found with ${this.stringifyObject(conditions)}`,
+      );
+
+    return result;
   }
 }
