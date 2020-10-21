@@ -62,17 +62,26 @@ export class ProjectService extends ApiCrud<Project> {
   }
 
   async getProjects(user: User, query: any): Promise<WithMeta<Project[]>> {
-    return await this.getManyByRelationsWithMeta(query, [
-      {
-        where: `members.username = :username OR members.role = :role`,
-      },
-      {
-        setParameters: {
+    // return await this.getManyByRelationsWithMeta(query, [
+    //   {
+    //     andWhere: `(members.username = :username OR members.role = :role)`,
+    //   },
+    //   {
+    //     setParameters: {
+    //       username: user.username,
+    //       role: EProjectMemberRole.OWNER,
+    //     },
+    //   },
+    // ]);
+
+    return await this.getManyByRelationsWithMeta(query, qb => {
+      qb.innerJoinAndSelect('members.profile', 'profile')
+        .where(`members.username = :username OR members.role = :role`)
+        .setParameters({
           username: user.username,
           role: EProjectMemberRole.OWNER,
-        },
-      },
-    ]);
+        });
+    });
   }
 
   /**
