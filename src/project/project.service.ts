@@ -54,7 +54,7 @@ export class ProjectService extends ApiCrud<Project> {
    * @param user
    * @param projectId
    */
-  async getProject(
+  getProject(
     projectId: string,
     acl: TExtendFromQueries<any>,
   ): Promise<Project> {
@@ -62,7 +62,7 @@ export class ProjectService extends ApiCrud<Project> {
   }
 
   async getProjects(user: User, query: any): Promise<WithMeta<Project[]>> {
-    return this.getManyByRelationsWithMeta(query, [
+    return await this.getManyByRelationsWithMeta(query, [
       {
         where: `members.username = :username OR members.role = :role`,
       },

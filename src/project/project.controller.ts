@@ -70,7 +70,7 @@ export class ProjectController {
     return await this.projectMemberService.requestToJoin(user, projectId);
   }
 
-  @Post(`/:projectId/members/transfer`)
+  @Post(`/:projectId/members/:username/transfer`)
   async transferOwnership(
     @GetUser() user: User,
     @Param('projectId', ParseUUIDPipe) projectId: string,
@@ -112,7 +112,7 @@ export class ProjectController {
     await this.projectMemberService.leaveProject(user, id);
   }
 
-  @Delete('/:project/members/:username')
+  @Delete('/:projectId/members/:username')
   async kickMember(
     @GetUser() user: User,
     @Param('projectId', ParseUUIDPipe) projectId: string,

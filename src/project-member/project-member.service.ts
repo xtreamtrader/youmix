@@ -47,17 +47,26 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
    * @override A function to validate for role access
    * @param owner
    * @param user
-   * @param forMember
+   * @param roles
    */
   validateRole(
     projectMember: ProjectMember,
     user: User,
-    roles: EProjectMemberRole[],
+    roles?: EProjectMemberRole[],
   ): boolean {
+    console.log(projectMember);
+    console.log(roles);
     if (user.role === EAccountRole.ADMIN) return true;
 
     if (Array.isArray(roles) && roles.includes(projectMember.role)) return true;
 
+    // If no roles provided, check for OWNER by default
+    if (
+      typeof roles === undefined &&
+      projectMember.role === EProjectMemberRole.OWNER &&
+      projectMember.username === user.username
+    )
+      return true;
     return false;
   }
 
@@ -99,7 +108,7 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
   ): Promise<WithMeta<ProjectMember[]>> {
     return this.getManyByRelationsWithMeta(
       { projectId },
-      this.accessMembersListByUserRoleOption(user, projectId)
+      this.accessMembersListByUserRoleOption(user, projectId),
     );
   }
   /**
@@ -186,8 +195,12 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
 
     return this.create(member, {
       hasRoleValidator: true,
-      triggerParams: [projectId],
-      validatorParams: [user, true],
+      triggerParams: [projectId, user.username],
+      findOneBeforeCreate: { projectId, username },
+      validatorParams: [
+        user,
+        [EProjectMemberRole.OWNER, EProjectMemberRole.MEMBER],
+      ],
     });
   }
 
@@ -197,31 +210,21 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
    * @param projectId
    */
   async requestToJoin(user: User, projectId: string): Promise<ProjectMember> {
-    try {
-      const member = await this.findOneByProjectIdAndUsername(
+    const member = new ProjectMember();
+    member.username = user.username;
+    member.projectId = projectId;
+    member.role = EProjectMemberRole.GUESTMEMBER;
+
+    return this.create(member, {
+      findOneBeforeCreate: {
+        username: user.username,
         projectId,
-        user.username,
-      );
-
-      if (member)
-        throw new ConflictException(
-          `The username ${user.username} has already joined in project ${projectId} as ${member.role}`,
-        );
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        console.log('goto here');
-        return this.create({
-          projectId,
-          username: user.username,
-          role: EProjectMemberRole.GUESTMEMBER,
-        });
-      }
-
-      throw error;
-    }
+      },
+    });
   }
 
   async leaveProject(user: User, projectId: string): Promise<void> {
+    console.log('goto delete');
     await this.deleteOneByConditions(
       {
         projectId,
@@ -229,7 +232,7 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
       },
       null,
       {
-        triggerParams: [projectId, user.username],
+        // triggerParams: [projectId, user.username],
         validatorParams: [
           user,
           [
@@ -238,6 +241,9 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
             EProjectMemberRole.MEMBER,
           ],
         ],
+      },
+      {
+        softDelete: false,
       },
     );
   }
@@ -254,12 +260,12 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
       },
       null,
       {
-        triggerParams: [user.username],
+        triggerParams: [projectId, user.username],
         validatorParams: [user, [EProjectMemberRole.OWNER]],
         postValidator: () => {
           if (user.username === username)
-            throw new BadRequestException(
-              "You can't not kick yourself out of this project because you are now an owner. Try to transfer ownership to another and use leave project function instead",
+            throw new ForbiddenException(
+              "You can not kick yourself out of this project because you are now an owner. Try to transfer ownership to another and use leave project function instead",
             );
         },
       },
@@ -297,7 +303,7 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
       },
       null,
       {
-        triggerParams: [projectId],
+        triggerParams: [projectId, user.username],
         validatorParams: [user, [EProjectMemberRole.OWNER]],
       },
     );
@@ -318,7 +324,7 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
     }
 
     // Check is targetUsername has already joined in current project
-    const targetMember = await this.findOneByProjectIdAndUsername(
+    const targetMember = await this.findActiveMemberByProjectIdAndUsername(
       projectId,
       targetUsername,
     );
