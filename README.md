@@ -65,6 +65,7 @@ $ npm run test:cov
 - [ ] Refactor util files into a NestJS Module
 - [ ] Add Swagger for API documentation
 - [ ] Write test -\_-
+- [ ] Seed projects features
 
 ## In Progress
 
