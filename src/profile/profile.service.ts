@@ -85,12 +85,9 @@ export class ProfileService extends ApiCrud<Profile> {
     query: TApiFeaturesDto<Profile>,
   ): Promise<WithMeta<Profile[]>> {
     return this.getManyWithMeta(query, [
-      // {
-      //   andWhere: `username != '${username}'`,
-      // }
       {
-        addFrom: 'sd'
-      }
+        andWhere: `username != '${username}'`,
+      },
     ]);
   }
 
