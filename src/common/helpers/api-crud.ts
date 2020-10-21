@@ -178,7 +178,7 @@ export default abstract class ApiCrud<T> {
    */
   protected filterError(error: any): void {
     if (error.name === 'QueryFailedError') {
-      if (error.code === '42703')
+      if (error.code === '42703' || error.code === '22P02')
         throw new BadRequestException('Invalid query paramaters');
 
       if ((error as any).code === '23505') {
@@ -455,7 +455,14 @@ export default abstract class ApiCrud<T> {
   ) {
     const filters = (({ sort, limit, page, search, ...o }) => o)(queryParams);
 
-    if (!filters || Object.keys(filters).length === 0) return;
+    if (
+      !filters ||
+      Object.keys(filters).length === 0 ||
+      (Object.keys(filters).length === 1 &&
+        filters[Object.keys(filters)[0]].length === 0)
+    )
+      return;
+
     const queryBrackets = new Brackets(q => {
       Object.keys(filters).forEach((key, keyIdx) => {
         const keyWithAlias = this.withAlias(key);
@@ -567,114 +574,6 @@ export default abstract class ApiCrud<T> {
     });
 
     query.andWhere(new Brackets(qb => qb.where(queryBrackets)));
-    // query.andWhere(qb => {qbqueryBrackets});
-    // Object.keys(filters).forEach((key, keyIdx) => {
-    //   const keyWithAlias = this.withAlias(key);
-
-    //   if (Array.isArray(filters[key])) {
-    //     if (filters[key].length === 0) return;
-
-    //     if (this.meta[key] === 'array') {
-    //       query.andWhere(`${keyWithAlias} && :val_${keyIdx}`, {
-    //         [`val_${keyIdx}`]: Array.isArray(filters[key]),
-    //       });
-    //       return;
-    //     }
-
-    //     const bracket = new Brackets(qb => {
-    //       filters[key].forEach((subFilter, sfIdx) => {
-    //         if (this.meta[key] === 'array') {
-    //           qb.orWhere(`${keyWithAlias} && :val_${keyIdx}_${sfIdx}`, {
-    //             [`val_${keyIdx}_${sfIdx}`]: subFilter,
-    //           });
-    //           return;
-    //         }
-
-    //         if (this.meta[key] === 'jsonb') {
-    //           return;
-    //         }
-
-    //         if (this.options.reservedFields.includes(key)) {
-    //           return;
-    //         }
-
-    //         if (this.meta[key] === 'uuid') {
-    //           qb.orWhere(`${keyWithAlias} = ':val_${keyIdx}_${sfIdx}'`, {
-    //             [`val_${keyIdx}_${sfIdx}`]: subFilter,
-    //           });
-    //           return;
-    //         }
-
-    //         if (this.meta[key] === 'number') {
-    //           qb.orWhere(`${keyWithAlias} =:val_${keyIdx}_${sfIdx}`, {
-    //             [`val_${keyIdx}_${sfIdx}`]: subFilter,
-    //           });
-    //           return;
-    //         }
-
-    //         if (this.meta[key] === 'simple-array') {
-    //           qb.orWhere(`${keyWithAlias} ILIKE '%${subFilter}%'`);
-    //           return;
-    //         }
-
-    //         if (this.meta[key] === 'date' || this.meta[key] === 'timestamp') {
-    //           qb.orWhere(
-    //             `${keyWithAlias} ::date =:val_${keyIdx}_${sfIdx} ::date`,
-    //             {
-    //               [`val_${keyIdx}_${sfIdx}`]: subFilter,
-    //             },
-    //           );
-    //           return;
-    //         }
-
-    //         qb.orWhere(`${keyWithAlias} ILIKE '${subFilter}'`);
-    //       });
-    //     });
-
-    //     query.andWhere(bracket);
-    //   } else {
-    //     if (this.meta[key] === 'jsonb') {
-    //       return;
-    //     }
-
-    //     if (this.options.reservedFields.includes(key)) {
-    //       return;
-    //     }
-
-    //     if (this.meta[key] === 'array') {
-    //       query.andWhere(`${keyWithAlias} && :val_${keyIdx}`, {
-    //         [`val_${keyIdx}`]: [filters[key]],
-    //       });
-    //       return;
-    //     }
-
-    //     if (this.meta[key] === 'uuid') {
-    //       query.andWhere(`${keyWithAlias} = '${filters[key]}'`);
-    //       return;
-    //     }
-
-    //     if (this.meta[key] === 'number') {
-    //       query.andWhere(`${keyWithAlias} = ${filters[key]}`);
-    //       return;
-    //     }
-
-    //     if (this.meta[key] === 'simple-array') {
-    //       query.andWhere(`${keyWithAlias} ILIKE '%${filters[key]}%'`);
-    //       return;
-    //     }
-
-    //     if (this.meta[key] === 'date' || this.meta[key] === 'timestamp') {
-    //       query.andWhere(`${keyWithAlias} ::date =:val_${keyIdx} ::date`, {
-    //         [`val_${keyIdx}`]: filters[key],
-    //       });
-    //       return;
-    //     }
-
-    //     query.andWhere(`${keyWithAlias} ILIKE :val_${keyIdx}`, {
-    //       [`val_${keyIdx}`]: filters[key],
-    //     });
-    //   }
-    // });
   }
 
   /**
