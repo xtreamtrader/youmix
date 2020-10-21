@@ -212,13 +212,15 @@ export default abstract class ApiCrud<T> {
    */
   private reflectMetaData() {
     const metadata = this.repository.metadata;
+
     this.meta = metadata.columns.reduce(
       (acc, cur) => ({
         ...acc,
-        [cur.propertyName]:
-          typeof cur.type === 'function'
-            ? cur.type.name.toLowerCase()
-            : cur.type,
+        [cur.propertyName]: cur.isArray
+          ? 'array'
+          : typeof cur.type === 'function'
+          ? cur.type.name.toLowerCase()
+          : cur.type,
       }),
       {},
     );
@@ -334,9 +336,10 @@ export default abstract class ApiCrud<T> {
   ): SelectQueryBuilder<T> {
     const query = this.repository.createQueryBuilder(this.alias);
 
+    this.setRelations(query);
+
     if (extendFromQueries) this.setExtendFromQueries(query, extendFromQueries);
 
-    this.setRelations(query);
     this.setFilterConditions(query, queryParams);
     this.setOrderBy(query, queryParams);
     this.setPagination(query, queryParams);
@@ -355,6 +358,9 @@ export default abstract class ApiCrud<T> {
     extendFromQueries: TExtendFromQueries<T>,
   ): void {
     if (Array.isArray(extendFromQueries)) {
+      // const queryToBracket = new Brackets(qb => {
+      //   qb.
+      // })
       extendFromQueries.forEach(q => {
         const action = Object.keys(q)[0];
 
@@ -422,6 +428,8 @@ export default abstract class ApiCrud<T> {
     query: SelectQueryBuilder<T>,
     queryParams: TApiFeaturesDto<T>,
   ) {
+    if (this.meta.searchWeights !== 'tsvector') return;
+
     const { search } = queryParams;
 
     const searchFieldhWithAlias = this.withAlias('searchWeight');
@@ -439,7 +447,7 @@ export default abstract class ApiCrud<T> {
   }
 
   /**
-   * Set filter by parameters from query: `filed1=value1&field2=value2`
+   * Set filter by parameters from query: `field1=value1&field2=value2`
    */
   private setFilterConditions(
     query: SelectQueryBuilder<T>,
@@ -447,92 +455,226 @@ export default abstract class ApiCrud<T> {
   ) {
     const filters = (({ sort, limit, page, search, ...o }) => o)(queryParams);
 
-    Object.keys(filters).forEach((key, keyIdx) => {
-      const keyWithAlias = this.withAlias(key);
+    if (!filters || Object.keys(filters).length === 0) return;
+    const queryBrackets = new Brackets(q => {
+      Object.keys(filters).forEach((key, keyIdx) => {
+        const keyWithAlias = this.withAlias(key);
 
-      if (Array.isArray(filters[key])) {
-        if (filters[key].length === 0) return;
+        if (Array.isArray(filters[key])) {
+          if (filters[key].length === 0) return;
 
-        const bracket = new Brackets(qb => {
-          filters[key].forEach((subFilter, sfIdx) => {
-            if (this.meta[key] === 'jsonb') {
-              return;
-            }
+          if (this.meta[key] === 'array') {
+            q.andWhere(`${keyWithAlias} && :val_${keyIdx}`, {
+              [`val_${keyIdx}`]: Array.isArray(filters[key]),
+            });
+            return;
+          }
 
-            if (this.options.reservedFields.includes(key)) {
-              return;
-            }
-
-            if (this.meta[key] === 'uuid') {
-              qb.orWhere(`${keyWithAlias} = ':val_${keyIdx}_${sfIdx}'`, {
-                [`val_${keyIdx}_${sfIdx}`]: subFilter,
-              });
-              return;
-            }
-
-            if (this.meta[key] === 'number') {
-              qb.orWhere(`${keyWithAlias} =:val_${keyIdx}_${sfIdx}`, {
-                [`val_${keyIdx}_${sfIdx}`]: subFilter,
-              });
-              return;
-            }
-
-            if (this.meta[key] === 'simple-array') {
-              qb.orWhere(`${keyWithAlias} ILIKE '%${subFilter}%'`);
-              return;
-            }
-
-            if (this.meta[key] === 'date' || this.meta[key] === 'timestamp') {
-              qb.orWhere(
-                `${keyWithAlias} ::date =:val_${keyIdx}_${sfIdx} ::date`,
-                {
+          const bracket = new Brackets(qb => {
+            filters[key].forEach((subFilter, sfIdx) => {
+              if (this.meta[key] === 'array') {
+                qb.orWhere(`${keyWithAlias} && :val_${keyIdx}_${sfIdx}`, {
                   [`val_${keyIdx}_${sfIdx}`]: subFilter,
-                },
-              );
-              return;
-            }
+                });
+                return;
+              }
 
-            qb.orWhere(`${keyWithAlias} ILIKE '${subFilter}'`);
+              if (this.meta[key] === 'jsonb') {
+                return;
+              }
+
+              if (this.options.reservedFields.includes(key)) {
+                return;
+              }
+
+              if (this.meta[key] === 'uuid') {
+                qb.orWhere(`${keyWithAlias} = ':val_${keyIdx}_${sfIdx}'`, {
+                  [`val_${keyIdx}_${sfIdx}`]: subFilter,
+                });
+                return;
+              }
+
+              if (this.meta[key] === 'number') {
+                qb.orWhere(`${keyWithAlias} =:val_${keyIdx}_${sfIdx}`, {
+                  [`val_${keyIdx}_${sfIdx}`]: subFilter,
+                });
+                return;
+              }
+
+              if (this.meta[key] === 'simple-array') {
+                qb.orWhere(`${keyWithAlias} ILIKE '%${subFilter}%'`);
+                return;
+              }
+
+              if (this.meta[key] === 'date' || this.meta[key] === 'timestamp') {
+                qb.orWhere(
+                  `${keyWithAlias} ::date =:val_${keyIdx}_${sfIdx} ::date`,
+                  {
+                    [`val_${keyIdx}_${sfIdx}`]: subFilter,
+                  },
+                );
+                return;
+              }
+
+              qb.orWhere(`${keyWithAlias} ILIKE '${subFilter}'`);
+            });
           });
-        });
 
-        query.andWhere(bracket);
-      } else {
-        if (this.meta[key] === 'jsonb') {
-          return;
-        }
+          q.andWhere(bracket);
+        } else {
+          if (this.meta[key] === 'jsonb') {
+            return;
+          }
 
-        if (this.options.reservedFields.includes(key)) {
-          return;
-        }
+          if (this.options.reservedFields.includes(key)) {
+            return;
+          }
 
-        if (this.meta[key] === 'uuid') {
-          query.andWhere(`${keyWithAlias} = '${filters[key]}'`);
-          return;
-        }
+          if (this.meta[key] === 'array') {
+            q.andWhere(`${keyWithAlias} && :val_${keyIdx}`, {
+              [`val_${keyIdx}`]: [filters[key]],
+            });
+            return;
+          }
 
-        if (this.meta[key] === 'number') {
-          query.andWhere(`${keyWithAlias} = ${filters[key]}`);
-          return;
-        }
+          if (this.meta[key] === 'uuid') {
+            q.andWhere(`${keyWithAlias} = '${filters[key]}'`);
+            return;
+          }
 
-        if (this.meta[key] === 'simple-array') {
-          query.andWhere(`${keyWithAlias} ILIKE '%${filters[key]}%'`);
-          return;
-        }
+          if (this.meta[key] === 'number') {
+            q.andWhere(`${keyWithAlias} = ${filters[key]}`);
+            return;
+          }
 
-        if (this.meta[key] === 'date' || this.meta[key] === 'timestamp') {
-          query.andWhere(`${keyWithAlias} ::date =:val_${keyIdx} ::date`, {
+          if (this.meta[key] === 'simple-array') {
+            q.andWhere(`${keyWithAlias} ILIKE '%${filters[key]}%'`);
+            return;
+          }
+
+          if (this.meta[key] === 'date' || this.meta[key] === 'timestamp') {
+            q.andWhere(`${keyWithAlias} ::date =:val_${keyIdx} ::date`, {
+              [`val_${keyIdx}`]: filters[key],
+            });
+            return;
+          }
+
+          q.andWhere(`${keyWithAlias} ILIKE :val_${keyIdx}`, {
             [`val_${keyIdx}`]: filters[key],
           });
-          return;
         }
-
-        query.andWhere(`${keyWithAlias} ILIKE :val_${keyIdx}`, {
-          [`val_${keyIdx}`]: filters[key],
-        });
-      }
+      });
     });
+
+    query.andWhere(new Brackets(qb => qb.where(queryBrackets)));
+    // query.andWhere(qb => {qbqueryBrackets});
+    // Object.keys(filters).forEach((key, keyIdx) => {
+    //   const keyWithAlias = this.withAlias(key);
+
+    //   if (Array.isArray(filters[key])) {
+    //     if (filters[key].length === 0) return;
+
+    //     if (this.meta[key] === 'array') {
+    //       query.andWhere(`${keyWithAlias} && :val_${keyIdx}`, {
+    //         [`val_${keyIdx}`]: Array.isArray(filters[key]),
+    //       });
+    //       return;
+    //     }
+
+    //     const bracket = new Brackets(qb => {
+    //       filters[key].forEach((subFilter, sfIdx) => {
+    //         if (this.meta[key] === 'array') {
+    //           qb.orWhere(`${keyWithAlias} && :val_${keyIdx}_${sfIdx}`, {
+    //             [`val_${keyIdx}_${sfIdx}`]: subFilter,
+    //           });
+    //           return;
+    //         }
+
+    //         if (this.meta[key] === 'jsonb') {
+    //           return;
+    //         }
+
+    //         if (this.options.reservedFields.includes(key)) {
+    //           return;
+    //         }
+
+    //         if (this.meta[key] === 'uuid') {
+    //           qb.orWhere(`${keyWithAlias} = ':val_${keyIdx}_${sfIdx}'`, {
+    //             [`val_${keyIdx}_${sfIdx}`]: subFilter,
+    //           });
+    //           return;
+    //         }
+
+    //         if (this.meta[key] === 'number') {
+    //           qb.orWhere(`${keyWithAlias} =:val_${keyIdx}_${sfIdx}`, {
+    //             [`val_${keyIdx}_${sfIdx}`]: subFilter,
+    //           });
+    //           return;
+    //         }
+
+    //         if (this.meta[key] === 'simple-array') {
+    //           qb.orWhere(`${keyWithAlias} ILIKE '%${subFilter}%'`);
+    //           return;
+    //         }
+
+    //         if (this.meta[key] === 'date' || this.meta[key] === 'timestamp') {
+    //           qb.orWhere(
+    //             `${keyWithAlias} ::date =:val_${keyIdx}_${sfIdx} ::date`,
+    //             {
+    //               [`val_${keyIdx}_${sfIdx}`]: subFilter,
+    //             },
+    //           );
+    //           return;
+    //         }
+
+    //         qb.orWhere(`${keyWithAlias} ILIKE '${subFilter}'`);
+    //       });
+    //     });
+
+    //     query.andWhere(bracket);
+    //   } else {
+    //     if (this.meta[key] === 'jsonb') {
+    //       return;
+    //     }
+
+    //     if (this.options.reservedFields.includes(key)) {
+    //       return;
+    //     }
+
+    //     if (this.meta[key] === 'array') {
+    //       query.andWhere(`${keyWithAlias} && :val_${keyIdx}`, {
+    //         [`val_${keyIdx}`]: [filters[key]],
+    //       });
+    //       return;
+    //     }
+
+    //     if (this.meta[key] === 'uuid') {
+    //       query.andWhere(`${keyWithAlias} = '${filters[key]}'`);
+    //       return;
+    //     }
+
+    //     if (this.meta[key] === 'number') {
+    //       query.andWhere(`${keyWithAlias} = ${filters[key]}`);
+    //       return;
+    //     }
+
+    //     if (this.meta[key] === 'simple-array') {
+    //       query.andWhere(`${keyWithAlias} ILIKE '%${filters[key]}%'`);
+    //       return;
+    //     }
+
+    //     if (this.meta[key] === 'date' || this.meta[key] === 'timestamp') {
+    //       query.andWhere(`${keyWithAlias} ::date =:val_${keyIdx} ::date`, {
+    //         [`val_${keyIdx}`]: filters[key],
+    //       });
+    //       return;
+    //     }
+
+    //     query.andWhere(`${keyWithAlias} ILIKE :val_${keyIdx}`, {
+    //       [`val_${keyIdx}`]: filters[key],
+    //     });
+    //   }
+    // });
   }
 
   /**
@@ -675,7 +817,7 @@ export default abstract class ApiCrud<T> {
     },
   ): Promise<void> {
     const record = await this.findOneByConditions(conditions, options);
-    
+
     await this.validateRoleHandler(record, validateOptions);
 
     if (!deleteOption?.softDelete)
