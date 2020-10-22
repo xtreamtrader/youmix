@@ -358,9 +358,6 @@ export default abstract class ApiCrud<T> {
     extendFromQueries: TExtendFromQueries<T>,
   ): void {
     if (Array.isArray(extendFromQueries)) {
-      // const queryToBracket = new Brackets(qb => {
-      //   qb.
-      // })
       extendFromQueries.forEach(q => {
         const action = Object.keys(q)[0];
 
@@ -432,7 +429,7 @@ export default abstract class ApiCrud<T> {
 
     const { search } = queryParams;
 
-    const searchFieldhWithAlias = this.withAlias('searchWeight');
+    const searchFieldhWithAlias = this.withAlias('searchWeights');
 
     if (search) {
       query
