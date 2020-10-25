@@ -11,6 +11,13 @@ import {
   EAccountGender,
 } from 'src/profile/profile.interfaces';
 import { appDefaultPreference } from 'src/config';
+import { Project } from 'src/project/project.entity';
+import {
+  EProjectStatus,
+  EProjectMemberRole,
+} from 'src/project/project.interfaces';
+import { ProjectMember } from 'src/project-member/project-member.entity';
+import { Profile } from 'src/profile/profile.entity';
 
 // Disable due to insufficent unique data which led to duplicated results
 // (faker as any).locale = 'vi';
@@ -19,8 +26,10 @@ import { appDefaultPreference } from 'src/config';
 export class SeedsService {
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
-    // @InjectRepository(Profile)
-    // private readonly profileRepository: Repository<Profile>,
+    @InjectRepository(Profile)
+    private readonly profileRepository: Repository<Profile>,
+    @InjectRepository(Project)
+    private readonly projectRepository: Repository<Project>,
     private readonly logger: Logger,
   ) {}
 
@@ -169,13 +178,95 @@ export class SeedsService {
     this.logger.log(`Removed ${result.affected} users`);
   }
 
+  private async upProject(count: number): Promise<void> {
+    // Get random owners from db
+    const owners = await this.profileRepository.find({
+      where: 'random() < 0.3',
+      take: count,
+    });
+
+    const projects: Project[] = [];
+
+    const currentTimestamp = +new Date();
+
+    const toClosingTimestamp = (currentTimestamp): number => {
+      const MIN_NEGATIVE_PERIOD = 24 * 60 * 60 * 1000; // 1 Day
+      const isExpires = Math.random() < 0.2;
+
+      if (isExpires)
+        return (
+          currentTimestamp -
+          (Math.random() * 3 * MIN_NEGATIVE_PERIOD + MIN_NEGATIVE_PERIOD)
+        );
+
+      return (
+        currentTimestamp +
+        (Math.random() * 10 * MIN_NEGATIVE_PERIOD + 5 * MIN_NEGATIVE_PERIOD)
+      );
+    };
+
+    this.logger.log(`Creating ${owners.length} projects...`);
+    for (let i = 0; i < owners.length; i++) {
+      const project = new Project();
+      project.name = faker.lorem.sentence();
+      project.major = this.getRandomizedChunk(Object.keys(EMajor));
+      project.expertises = this.getRandomizedChunk(this.dummyExpertises);
+      project.description = {
+        bio: faker.lorem.text(),
+        summary: faker.lorem.paragraphs(),
+        requirements: faker.lorem
+          .sentences(Math.floor(Math.random() * 7) + 3)
+          .slice(0, -1)
+          .split('.'),
+      };
+
+      const _ts = toClosingTimestamp(currentTimestamp);
+
+      project.closeAt = new Date(_ts);
+
+      project.status = 'SEED' as any;
+
+      const profiles = await this.profileRepository.find({
+        where: `random() < 0.005 and username != '${owners[i].username}'`,
+        take: 5,
+      });
+
+      const profileAsMembers = profiles.map(profile => ({
+        role: this.getRandomizedKey(EProjectMemberRole),
+        username: profile.username,
+      }));
+
+      profileAsMembers.push({
+        role: EProjectMemberRole.OWNER,
+        username: owners[i].username,
+      });
+
+      project.members = profileAsMembers as any;
+
+      projects.push(project);
+    }
+
+    this.logger.log(`...start saving...`);
+    await this.projectRepository.save(projects);
+    this.logger.debug(`Successfully seeded ${owners.length} projects`);
+  }
+
+  private async downProject(): Promise<void> {
+    this.logger.log('Remove seeded users');
+    const result = await this.projectRepository.delete({
+      status: 'SEED',
+    } as any);
+
+    this.logger.log(`Removed ${result.affected} projects`);
+  }
+
   /**
    * Seeding all entities
    * @param count
    */
   async up(count = 1000): Promise<void> {
     this.logger.log('Seeding data...');
-    await this.upUser(count);
+    await this.upProject(count);
     this.logger.log('done');
   }
 
@@ -184,7 +275,8 @@ export class SeedsService {
    */
   async down(): Promise<void> {
     this.logger.log('Removing seeding data...');
-    await this.downUser();
+    await this.downProject();
+    // await this.downUser();
     this.logger.log('done');
   }
 }
