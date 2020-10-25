@@ -16,6 +16,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { assignPartialObjectToEntity } from './entity.helper';
+import { plainToClass } from 'class-transformer';
 
 interface IApiCrudOptions {
   /**
@@ -38,6 +39,12 @@ interface IApiCrudOptions {
    * @default true
    */
   autoValidateOnUD?: boolean;
+
+  /**
+   * Enable auto transform with meta records to correspoding class defination
+   * @default true
+   */
+  transformWithMeta?: boolean;
 }
 
 interface IApiCrudValidatorOptions<T = any> {
@@ -131,6 +138,10 @@ export default abstract class ApiCrud<T> {
    */
   private autoValidationOnUD = true;
 
+  private transformWithMeta = true;
+
+  private schema: new (...args: any) => T;
+
   constructor(repository: Repository<T>, option: IApiCrudOptions) {
     this.repository = repository;
 
@@ -211,6 +222,8 @@ export default abstract class ApiCrud<T> {
    * Retrive columns's type from Repository's metadata
    */
   private reflectMetaData() {
+    this.schema = this.repository.target as any;
+
     const metadata = this.repository.metadata;
 
     this.meta = metadata.columns.reduce(
@@ -789,5 +802,14 @@ export default abstract class ApiCrud<T> {
       );
 
     return result;
+  }
+
+  public transformMetaRecords(records: WithMeta<T[]>): WithMeta<T[]> {
+    const { meta, data } = records;
+    const transformedData = plainToClass(this.schema, data);
+    return {
+      meta,
+      data: transformedData,
+    };
   }
 }
