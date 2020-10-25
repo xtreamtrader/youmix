@@ -1,8 +1,4 @@
-import {
-  Entity,
-  Column,
-  OneToMany,
-} from 'typeorm';
+import { Entity, Column, OneToMany } from 'typeorm';
 import { EMajor } from 'src/profile/profile.interfaces';
 import { IProjectDescription, EProjectStatus } from './project.interfaces';
 import { BaseModel } from 'src/common/helpers/entity.helper';
@@ -32,7 +28,8 @@ export class Project extends BaseModel(true) {
     () => ProjectMember,
     member => member.project,
     {
-      cascade: ['insert', 'remove', 'soft-remove'],
+      cascade: ['insert'],
+      onDelete: 'CASCADE',
       eager: true,
       nullable: true,
     },
