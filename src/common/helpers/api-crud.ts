@@ -44,7 +44,7 @@ interface IApiCrudOptions {
    * Enable auto transform with meta records to correspoding class defination
    * @default true
    */
-  transformWithMeta?: boolean;
+  hasTransformWithMeta?: boolean;
 }
 
 interface IApiCrudValidatorOptions<T = any> {
@@ -138,7 +138,7 @@ export default abstract class ApiCrud<T> {
    */
   private autoValidationOnUD = true;
 
-  private transformWithMeta = true;
+  private hasTransformWithMeta = true;
 
   private schema: new (...args: any) => T;
 
@@ -147,7 +147,9 @@ export default abstract class ApiCrud<T> {
 
     this.options = option;
 
-    this.autoValidationOnUD = this.autoValidationOnUD;
+    this.hasTransformWithMeta = option.hasTransformWithMeta;
+
+    this.autoValidationOnUD = option.autoValidateOnUD;
 
     this.alias = option.alias;
 
@@ -211,6 +213,24 @@ export default abstract class ApiCrud<T> {
       }
     }
     throw error;
+  }
+
+  protected toWithMeta(
+    result: [T[], number],
+    queryParams: TApiFeaturesDto<T>,
+  ): WithMeta<T[]> {
+    return {
+      data: this.hasTransformWithMeta
+        ? plainToClass(this.schema, result[0])
+        : result[0],
+      meta: {
+        currentPage: queryParams.page as any,
+        limit: queryParams.limit as number,
+        count: result[0].length,
+        totalPage: Math.ceil(result[1] / (queryParams.limit as number)),
+        totalResult: result[1],
+      },
+    };
   }
 
   /***********************************************************************************
@@ -747,16 +767,7 @@ export default abstract class ApiCrud<T> {
     try {
       const result = await query.getManyAndCount();
 
-      return {
-        data: result[0],
-        meta: {
-          currentPage: queryParams.page as any,
-          limit: queryParams.limit as number,
-          count: result[0].length,
-          totalPage: Math.ceil(result[1] / (queryParams.limit as number)),
-          totalResult: result[1],
-        },
-      };
+      return this.toWithMeta(result, queryParams);
     } catch (error) {
       this.filterError(error);
     }
@@ -773,16 +784,7 @@ export default abstract class ApiCrud<T> {
     const query = this.createQuery(queryParams, extendQueries);
     try {
       const result = await query.getManyAndCount();
-      return {
-        data: result[0],
-        meta: {
-          currentPage: queryParams.page as any,
-          limit: queryParams.limit as number,
-          count: result[0].length,
-          totalPage: Math.ceil(result[1] / (queryParams.limit as number)),
-          totalResult: result[1],
-        },
-      };
+      return this.toWithMeta(result, queryParams);
     } catch (error) {
       this.filterError(error);
     }
@@ -802,14 +804,5 @@ export default abstract class ApiCrud<T> {
       );
 
     return result;
-  }
-
-  public transformMetaRecords(records: WithMeta<T[]>): WithMeta<T[]> {
-    const { meta, data } = records;
-    const transformedData = plainToClass(this.schema, data);
-    return {
-      meta,
-      data: transformedData,
-    };
   }
 }
