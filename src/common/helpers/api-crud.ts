@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   SelectQueryBuilder,
   Brackets,
@@ -131,14 +132,14 @@ export default abstract class ApiCrud<T> {
   /**
    * The default array of properties which will be removed from query generated from createQuery method (ex: getManyWithMeta and getManyByRelationsWithMeta)
    */
-  private reservedFilterFields = ['createdAt', 'deletedAt', 'updatedAt', 'id'];
+  private reservedFilterFields = ['createdAt', 'deletedAt', 'updatedAt'];
 
   /**
    * Default validation behavior on Update and Delete tasks
    */
-  private autoValidationOnUD = true;
+  private autoValidationOnUD: boolean;
 
-  private hasTransformWithMeta = true;
+  private hasTransformWithMeta: boolean;
 
   private schema: new (...args: any) => T;
 
@@ -147,9 +148,9 @@ export default abstract class ApiCrud<T> {
 
     this.options = option;
 
-    this.hasTransformWithMeta = option.hasTransformWithMeta;
+    this.hasTransformWithMeta = option.hasTransformWithMeta || true;
 
-    this.autoValidationOnUD = option.autoValidateOnUD;
+    this.autoValidationOnUD = option.autoValidateOnUD || true;
 
     this.alias = option.alias;
 
@@ -603,7 +604,7 @@ export default abstract class ApiCrud<T> {
       });
     });
 
-    query.andWhere(new Brackets(qb => qb.where(queryBrackets)));
+    query.andWhere(queryBrackets);
   }
 
   /**
@@ -757,7 +758,6 @@ export default abstract class ApiCrud<T> {
       .catch(error => this.filterError(error)) as any;
   }
 
-  // TODO Create withMeta method
   public async getManyWithMeta(
     queryParams: TApiFeaturesDto<T>,
     extendQueries?: TExtendFromQueries<T>,

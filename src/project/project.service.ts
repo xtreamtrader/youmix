@@ -54,29 +54,21 @@ export class ProjectService extends ApiCrud<Project> {
    * @param user
    * @param projectId
    */
-  getProject(
-    projectId: string,
-    acl: TExtendFromQueries<any>,
-  ): Promise<Project> {
-    return this.findOneByParamsWithDefaultRelations({ id: projectId }, acl);
+  getProject(projectId: string, user: User): Promise<Project> {
+    return this.findOneByParamsWithDefaultRelations({ id: projectId }, qb => {
+      qb.innerJoinAndSelect('members.profile', 'profile')
+        .andWhere(`(members.username = :username OR members.role = :role)`)
+        .setParameters({
+          username: user.username,
+          role: EProjectMemberRole.OWNER,
+        });
+    });
   }
 
   async getProjects(user: User, query: any): Promise<WithMeta<Project[]>> {
-    // return await this.getManyByRelationsWithMeta(query, [
-    //   {
-    //     andWhere: `(members.username = :username OR members.role = :role)`,
-    //   },
-    //   {
-    //     setParameters: {
-    //       username: user.username,
-    //       role: EProjectMemberRole.OWNER,
-    //     },
-    //   },
-    // ]);
-
     return await this.getManyByRelationsWithMeta(query, qb => {
       qb.innerJoinAndSelect('members.profile', 'profile')
-        .where(`members.username = :username OR members.role = :role`)
+        .andWhere(`(members.username = :username OR members.role = :role)`)
         .setParameters({
           username: user.username,
           role: EProjectMemberRole.OWNER,
