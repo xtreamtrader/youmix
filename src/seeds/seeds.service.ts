@@ -86,8 +86,19 @@ export class SeedsService {
    * Return single random value from an object
    * @param o
    */
-  private getRandomizedKey(o: any): string {
-    const keys = Object.keys(o);
+  private getRandomizedKey(o: any, excludeKey?: string | string[]): string {
+    if (!excludeKey) {
+      const keys = Object.keys(o);
+      return keys[Math.floor(Math.random() * keys.length)];
+    }
+
+    const clonedO = { ...o };
+
+    if (Array.isArray(excludeKey)) excludeKey.forEach(e => delete clonedO[e]);
+
+    if (typeof excludeKey === 'string') delete clonedO[excludeKey];
+
+    const keys = Object.keys(clonedO);
     return keys[Math.floor(Math.random() * keys.length)];
   }
 
@@ -206,6 +217,7 @@ export class SeedsService {
     };
 
     this.logger.log(`Creating ${owners.length} projects...`);
+
     for (let i = 0; i < owners.length; i++) {
       const project = new Project();
       project.name = faker.lorem.sentence();
@@ -232,7 +244,7 @@ export class SeedsService {
       });
 
       const profileAsMembers = profiles.map(profile => ({
-        role: this.getRandomizedKey(EProjectMemberRole),
+        role: this.getRandomizedKey(EProjectMemberRole, 'OWNER'),
         username: profile.username,
       }));
 
