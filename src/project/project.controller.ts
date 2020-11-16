@@ -129,7 +129,10 @@ export class ProjectController {
     @GetUser() user: User,
     @Query() query,
   ): Promise<WithMeta<Project[]>> {
-    return await this.projectService.getProjects(user, query);
+    return await this.projectService.getProjects(
+      query,
+      this.projectMemberService.selectOwnerAndMe(user),
+    );
   }
 
   @Post()
@@ -147,7 +150,7 @@ export class ProjectController {
   ): Promise<Project> {
     return await this.projectService.getProject(
       id,
-      this.projectMemberService.accessMembersListByUserRoleOption(user, id),
+      this.projectMemberService.selectOwnerAndMe(user),
     );
   }
   @Patch('/:id')

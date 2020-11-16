@@ -54,8 +54,6 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
     user: User,
     roles?: EProjectMemberRole[],
   ): boolean {
-    console.log(projectMember);
-    console.log(roles);
     if (user.role === EAccountRole.ADMIN) return true;
 
     if (Array.isArray(roles) && roles.includes(projectMember.role)) return true;
@@ -98,6 +96,21 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
           projectId: projectId,
           username: user.username,
           roles: [EProjectMemberRole.MEMBER, EProjectMemberRole.OWNER],
+        });
+    };
+  }
+
+  /**
+   * Return an option to list the members whose either role is OWNER or username is equal to given user
+   * @param user 
+   */
+  selectOwnerAndMe(user: User): TExtendFromQueries<any> {
+    return qb => {
+      qb.innerJoinAndSelect('members.profile', 'profile')
+        .andWhere(`(members.username = :username OR members.role = :role)`)
+        .setParameters({
+          username: user.username,
+          role: EProjectMemberRole.OWNER,
         });
     };
   }
@@ -224,7 +237,6 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
   }
 
   async leaveProject(user: User, projectId: string): Promise<void> {
-    console.log('goto delete');
     await this.deleteOneByConditions(
       {
         projectId,
@@ -265,7 +277,7 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
         postValidator: () => {
           if (user.username === username)
             throw new ForbiddenException(
-              "You can not kick yourself out of this project because you are now an owner. Try to transfer ownership to another and use leave project function instead",
+              'You can not kick yourself out of this project because you are now an owner. Try to transfer ownership to another and use leave project function instead',
             );
         },
       },

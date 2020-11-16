@@ -31,9 +31,11 @@ export class ProjectService extends ApiCrud<Project> {
     createProjectDto: CreateProjectDto,
   ): Promise<Project> {
     const project = new Project();
+
     assignPartialObjectToEntity(project, createProjectDto);
 
     const projectMember = new ProjectMember();
+
     projectMember.username = user.username;
     projectMember.role = EProjectMemberRole.OWNER;
 
@@ -44,36 +46,22 @@ export class ProjectService extends ApiCrud<Project> {
   }
 
   /**
-   * Return project with a list of members based on specfic user:
-   *
-   * If user is a member of a project (Role: OWNER | MEMBER): Return all members (includes: GUESTMEMBER, INVITED)
-   *
-   * If user is either GUESTMEMBER OR INVITED : Return only OWNER and MEMBER and its user's member data.
-   *
-   * If user is non-of these type (have no activity involed in joining the project): Return only OWNER and MEMBER
+   * Return project with by with allowed members
    * @param user
    * @param projectId
    */
-  getProject(projectId: string, user: User): Promise<Project> {
-    return this.findOneByParamsWithDefaultRelations({ id: projectId }, qb => {
-      qb.innerJoinAndSelect('members.profile', 'profile')
-        .andWhere(`(members.username = :username OR members.role = :role)`)
-        .setParameters({
-          username: user.username,
-          role: EProjectMemberRole.OWNER,
-        });
-    });
+  getProject(
+    projectId: string,
+    acl: TExtendFromQueries<any>,
+  ): Promise<Project> {
+    return this.findOneByParamsWithDefaultRelations({ id: projectId }, acl);
   }
 
-  async getProjects(user: User, query: any): Promise<WithMeta<Project[]>> {
-    return await this.getManyByRelationsWithMeta(query, qb => {
-      qb.innerJoinAndSelect('members.profile', 'profile')
-        .andWhere(`(members.username = :username OR members.role = :role)`)
-        .setParameters({
-          username: user.username,
-          role: EProjectMemberRole.OWNER,
-        });
-    });
+  async getProjects(
+    query: any,
+    acl: TExtendFromQueries<any>,
+  ): Promise<WithMeta<Project[]>> {
+    return await this.getManyByRelationsWithMeta(query, acl);
   }
 
   /**
