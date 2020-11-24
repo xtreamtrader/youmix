@@ -7,12 +7,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ProjectMember } from './project-member.entity';
-import { Repository, In } from 'typeorm';
+import { Repository, In, Brackets } from 'typeorm';
 import { EProjectMemberRole } from '../project/project.interfaces';
 import ApiCrud, { TExtendFromQueries } from 'src/common/helpers/api-crud';
 import { User } from 'src/user/user.entity';
 import { EAccountRole } from 'src/common/interfaces/account-role.interface';
-import { WithMeta } from 'src/common/interfaces/api-features';
+import { WithMeta, TApiFeaturesDto } from 'src/common/interfaces/api-features';
+import { Profile } from 'src/profile/profile.entity';
 
 @Injectable()
 export class ProjectMemberService extends ApiCrud<ProjectMember> {
@@ -84,13 +85,13 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
             .andWhere(`members.role IN (:...roles) `)
             .getQuery();
 
-          return `${subQuery} > 0 AND  members.projectId = '${projectId}'`;
+          return `(${subQuery} > 0 AND  members.projectId = '${projectId}'`;
         })
         .orWhere(
           'members.projectId = :projectId AND members.role IN (:...roles)',
         )
         .orWhere(
-          `members.projectId = :projectId AND members.username = :username`,
+          `members.projectId = :projectId AND members.username = :username)`,
         )
         .setParameters({
           projectId: projectId,
@@ -102,7 +103,7 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
 
   /**
    * Return an option to list the members whose either role is OWNER or username is equal to given user
-   * @param user 
+   * @param user
    */
   selectOwnerAndMe(user: User): TExtendFromQueries<any> {
     return qb => {
@@ -118,9 +119,11 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
   async findMembers(
     user: User,
     projectId: string,
+    query: TApiFeaturesDto<ProjectMember & Pick<Profile, 'fullname'>>,
   ): Promise<WithMeta<ProjectMember[]>> {
+    // query.
     return this.getManyByRelationsWithMeta(
-      { projectId },
+      { ...query, projectId },
       this.accessMembersListByUserRoleOption(user, projectId),
     );
   }
@@ -335,7 +338,7 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
       throw new ForbiddenException();
     }
 
-    // Check is targetUsername has already joined in current project
+    // Check if targetUsername has already joined in current project
     const targetMember = await this.findActiveMemberByProjectIdAndUsername(
       projectId,
       targetUsername,
