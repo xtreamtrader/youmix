@@ -18,6 +18,9 @@ import { User } from 'src/user/user.entity';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectMemberService } from 'src/project-member/project-member.service';
 import { ProjectMember } from 'src/project-member/project-member.entity';
+import { ProjectQueryParamsDto } from './dto/project-query-params.dto';
+import { SearchProjectMemberQueryParamsDto } from 'src/project-member/search-project-member-query-params.dto';
+import { query } from 'express';
 
 @Controller('projects')
 export class ProjectController {
@@ -34,8 +37,10 @@ export class ProjectController {
   async getAllMembersOfProject(
     @GetUser() user: User,
     @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query()
+    searchProjectMemberQueryParamsDto: SearchProjectMemberQueryParamsDto,
   ): Promise<WithMeta<ProjectMember[]>> {
-    return await this.projectMemberService.findMembers(user, projectId);
+    return await this.projectMemberService.findMembers(user, projectId, searchProjectMemberQueryParamsDto);
   }
 
   @Get('/:projectId/members/:username')
@@ -127,8 +132,9 @@ export class ProjectController {
   @Get()
   async getAllProjects(
     @GetUser() user: User,
-    @Query() query,
+    @Query() query: ProjectQueryParamsDto,
   ): Promise<WithMeta<Project[]>> {
+    console.log(query);
     return await this.projectService.getProjects(
       query,
       this.projectMemberService.selectOwnerAndMe(user),

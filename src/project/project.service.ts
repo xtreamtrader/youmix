@@ -8,7 +8,7 @@ import { assignPartialObjectToEntity } from 'src/common/helpers/entity.helper';
 import { EProjectStatus, EProjectMemberRole } from './project.interfaces';
 import { User } from 'src/user/user.entity';
 import { EAccountRole } from 'src/common/interfaces/account-role.interface';
-import { WithMeta } from 'src/common/interfaces/api-features';
+import { WithMeta, TApiFeaturesDto } from 'src/common/interfaces/api-features';
 import ApiCrud, { TExtendFromQueries } from 'src/common/helpers/api-crud';
 
 @Injectable()
@@ -22,6 +22,12 @@ export class ProjectService extends ApiCrud<Project> {
       relations: {
         prop: 'members',
         alias: 'members',
+        nestedRelation: [
+          {
+            prop: 'profile',
+            alias: 'profile',
+          },
+        ],
       },
     });
   }
@@ -54,14 +60,14 @@ export class ProjectService extends ApiCrud<Project> {
     projectId: string,
     acl: TExtendFromQueries<any>,
   ): Promise<Project> {
-    return this.findOneByParamsWithDefaultRelations({ id: projectId }, acl);
+    return this.findOneByParamsWithDefaultRelations({ id: projectId }, acl, ['profile']);
   }
 
   async getProjects(
-    query: any,
+    query: TApiFeaturesDto<Project>,
     acl: TExtendFromQueries<any>,
   ): Promise<WithMeta<Project[]>> {
-    return await this.getManyByRelationsWithMeta(query, acl);
+    return this.getManyByRelationsWithMeta(query, acl, ['profile']);
   }
 
   /**
