@@ -23,11 +23,18 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
   ) {
     super(projectMemberRepository, {
       alias: 'members',
+      searchOnRelation: 'profile',
       relations: {
         prop: 'profile',
         alias: 'profile',
       },
     });
+
+    // console.log(
+    //   projectMemberRepository.metadata.relations.map(e => {
+
+    //   }),
+    // );
   }
 
   /**
@@ -119,9 +126,8 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
   async findMembers(
     user: User,
     projectId: string,
-    query: TApiFeaturesDto<ProjectMember & Pick<Profile, 'fullname'>>,
+    query: TApiFeaturesDto<ProjectMember>,
   ): Promise<WithMeta<ProjectMember[]>> {
-    // query.
     return this.getManyByRelationsWithMeta(
       { ...query, projectId },
       this.accessMembersListByUserRoleOption(user, projectId),

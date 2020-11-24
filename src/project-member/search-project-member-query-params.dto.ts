@@ -1,17 +1,22 @@
 import { TApiFeaturesDto } from 'src/common/interfaces/api-features';
 import { ProjectMember } from './project-member.entity';
-import { Profile } from 'src/profile/profile.entity';
 import {
   IsOptional,
   IsNumberString,
-  IsAlphanumeric,
+  Matches,
+  IsString,
   MinLength,
   MaxLength,
-  IsString,
 } from 'class-validator';
+import { EProjectMemberRole } from 'src/project/project.interfaces';
+
+const memberRoleRegex = new RegExp(
+  `\\b(${Object.keys(EProjectMemberRole).join('|')})\\b`,
+  'i',
+);
 
 export class SearchProjectMemberQueryParamsDto
-  implements TApiFeaturesDto<ProjectMember & Pick<Profile, 'fullname'>> {
+  implements TApiFeaturesDto<ProjectMember> {
   @IsOptional()
   @IsNumberString()
   page?: number;
@@ -24,15 +29,13 @@ export class SearchProjectMemberQueryParamsDto
   sort?: string;
 
   @IsOptional()
-  // @IsAlphanumeric()
-  @IsString()
-  @MinLength(3)
-  @MaxLength(20)
-  username?: string;
+  @Matches(memberRoleRegex, {
+    message: 'Invalid role',
+  })
+  role?: string;
 
   @IsOptional()
   @IsString()
-  @MinLength(3)
-  @MaxLength(30)
-  fullname?: string;
+  @MaxLength(255)
+  search?: string;
 }

@@ -12,7 +12,7 @@ import { ProjectMemberService } from 'src/project-member/project-member.service'
     TypeOrmModule.forFeature([Project, ProjectMember]),
     ProjectMemberModule,
   ],
-  providers: [ProjectService, ProjectMemberService],
+  providers: [ProjectService],
   controllers: [ProjectController],
 })
 export class ProjectModule {}
