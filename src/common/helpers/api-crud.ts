@@ -19,6 +19,12 @@ import {
 import { assignPartialObjectToEntity } from './entity.helper';
 import { plainToClass } from 'class-transformer';
 
+interface IRelation {
+  prop: string;
+  alias: string;
+  nestedRelation?: Omit<IRelation, 'nestedRelation'>[];
+}
+
 interface IApiCrudOptions {
   /**
    * An alias for specific table name
@@ -33,7 +39,7 @@ interface IApiCrudOptions {
   /**
    * An array of relations which is used for leftJoin operator
    */
-  relations?: { prop: string; alias: string };
+  relations?: IRelation | IRelation[];
 
   /**
    * Enable auto validation on update and delete query
@@ -82,6 +88,11 @@ interface IApiCrudValidatorOptions<T = any> {
    * Throw an error if validation failed
    */
   postValidator?: (...args: any[]) => void;
+}
+
+interface IRelationExposedLevel {
+  include?: string[];
+  exclude?: string[];
 }
 
 /**
@@ -303,7 +314,7 @@ export default abstract class ApiCrud<T> {
    * @example { username: 'alice', address: 'lorem'} => 'username: alice, address: lorem'
    * @param obj
    */
-  private stringifyObject(obj: any): string {
+  private stringifyObject(obj: Record<string, any>): string {
     return Object.keys(obj)
       .reduce(
         (acc, cur) =>
@@ -367,10 +378,11 @@ export default abstract class ApiCrud<T> {
   private createQuery(
     queryParams: TApiFeaturesDto<T>,
     extendFromQueries?: TExtendFromQueries<T>,
+    hasRelation?: IRelationExposedLevel,
   ): SelectQueryBuilder<T> {
     const query = this.repository.createQueryBuilder(this.alias);
 
-    this.setRelations(query);
+    this.setRelations(query, hasRelation);
 
     if (extendFromQueries) this.setExtendFromQueries(query, extendFromQueries);
 
@@ -446,7 +458,7 @@ export default abstract class ApiCrud<T> {
     const _page = parseInt(page as string);
     page = _page !== NaN && _page > 0 ? _page : 1;
 
-    query.skip((page - 1) * limit).take(limit);
+    query.offset((page - 1) * limit).limit(limit);
 
     queryParams.limit = limit;
     queryParams.page = page;
@@ -463,15 +475,20 @@ export default abstract class ApiCrud<T> {
 
     const { search } = queryParams;
 
-    const searchFieldhWithAlias = this.withAlias('searchWeights');
+    console.log(search);
+
+    const searchFieldWithAlias = this.withAlias('searchWeights');
+
+    console.log(searchFieldWithAlias);
 
     if (search) {
       query
         .andWhere(
-          `${searchFieldhWithAlias} @@ plainto_tsquery(unaccent('${search}'))`,
+          `${searchFieldWithAlias} @@ plainto_tsquery(unaccent('${search}'))`,
         )
         .orderBy(
-          `ts_rank(${searchFieldhWithAlias}, plainto_tsquery(unaccent('${search}')))`,
+          `ts_rank(
+          ${searchFieldWithAlias}, plainto_tsquery(unaccent('${search}')))`,
           'DESC',
         );
     }
@@ -484,6 +501,8 @@ export default abstract class ApiCrud<T> {
     query: SelectQueryBuilder<T>,
     queryParams: TApiFeaturesDto<T>,
   ) {
+    console.log('goto here');
+    console.log(this.meta);
     const filters = (({ sort, limit, page, search, ...o }) => o)(queryParams);
 
     if (
@@ -502,18 +521,23 @@ export default abstract class ApiCrud<T> {
           if (filters[key].length === 0) return;
 
           if (this.meta[key] === 'array') {
-            q.andWhere(`${keyWithAlias} && :val_${keyIdx}`, {
-              [`val_${keyIdx}`]: Array.isArray(filters[key]),
-            });
+            q.andWhere(
+              `lower(${keyWithAlias}::text)::text[] && '${this.toPgLiteralArray(
+                filters[key],
+              )}'`,
+              // {
+              //   [`val_${keyIdx}`]: this.toPgLiteralArray(filters[key]),
+              // },
+            );
             return;
           }
 
           const bracket = new Brackets(qb => {
             filters[key].forEach((subFilter, sfIdx) => {
               if (this.meta[key] === 'array') {
-                qb.orWhere(`${keyWithAlias} && :val_${keyIdx}_${sfIdx}`, {
-                  [`val_${keyIdx}_${sfIdx}`]: subFilter,
-                });
+                // qb.orWhere(`${keyWithAlias} && :val_${keyIdx}_${sfIdx}`, {
+                //   [`val_${keyIdx}_${sfIdx}`]: subFilter,
+                // });
                 return;
               }
 
@@ -569,9 +593,12 @@ export default abstract class ApiCrud<T> {
           }
 
           if (this.meta[key] === 'array') {
-            q.andWhere(`${keyWithAlias} && :val_${keyIdx}`, {
-              [`val_${keyIdx}`]: [filters[key]],
-            });
+            q.andWhere(
+              `lower(${keyWithAlias}::text)::text[] && :val_${keyIdx}`,
+              {
+                [`val_${keyIdx}`]: this.toPgLiteralArray(filters[key]),
+              },
+            );
             return;
           }
 
@@ -611,12 +638,74 @@ export default abstract class ApiCrud<T> {
    * Apply relation to perform join operator
    * @param query
    */
-  private setRelations(query: SelectQueryBuilder<T>): void {
+  private setRelations(
+    query: SelectQueryBuilder<T>,
+    hasRelation?: IRelationExposedLevel,
+  ): void {
     if (!this.options.relations) return;
+    const { include, exclude } = hasRelation || {
+      include: undefined,
+      exclude: undefined,
+    };
 
-    const { prop, alias } = this.options.relations;
+    if (Array.isArray(this.options.relations)) {
+      //TODO handle include statement
+      this.options.relations.forEach(({ prop, alias, nestedRelation }) => {
+        if (exclude && exclude.includes(alias)) return;
 
-    query.leftJoinAndSelect(this.withAlias(prop), alias);
+        const propWithAlias = this.withAlias(prop);
+        query.leftJoinAndSelect(propWithAlias, alias);
+
+        if (
+          nestedRelation &&
+          Array.isArray(nestedRelation) &&
+          nestedRelation.length > 0
+        ) {
+          nestedRelation.forEach(({ prop: childProp, alias: childAlias }) => {
+            if (exclude && exclude.includes(childAlias)) return;
+            const nestedPropWithParentAlias = `${alias}.${childProp}`;
+            query.leftJoinAndSelect(nestedPropWithParentAlias, childAlias);
+          });
+        }
+      });
+
+      return;
+    }
+
+    const { prop, alias, nestedRelation } = this.options.relations;
+
+    if (exclude && exclude.includes(alias)) return;
+
+    const propWithAlias = this.withAlias(prop);
+    query.leftJoinAndSelect(propWithAlias, alias);
+
+    if (
+      nestedRelation &&
+      Array.isArray(nestedRelation) &&
+      nestedRelation.length > 0
+    ) {
+      nestedRelation.forEach(({ prop: childProp, alias: childAlias }) => {
+        if (exclude && exclude.includes(childAlias)) return;
+        const nestedPropWithParentAlias = `${alias}.${childProp}`;
+        query.leftJoinAndSelect(nestedPropWithParentAlias, childAlias);
+      });
+    }
+  }
+
+  private toPgLiteralArray(val: string | string[]): string {
+    if (typeof val === 'string') return `{"${val.toLowerCase()}"}`;
+
+    return val.length > 0
+      ? val.reduce((acc, cur, idx, origin) => {
+          acc += `"${cur.toLowerCase()}",`;
+
+          if (idx === origin.length - 1) {
+            acc = acc.slice(0, -1);
+            acc += '}';
+          }
+          return acc;
+        }, '{')
+      : `{}`;
   }
 
   /***********************************************************************************
@@ -772,6 +861,20 @@ export default abstract class ApiCrud<T> {
       this.filterError(error);
     }
   }
+  public async getMany(
+    queryParams: TApiFeaturesDto<T>,
+    extendQueries?: TExtendFromQueries<T>,
+  ): Promise<T[]> {
+    const query = this.createQuery(queryParams, extendQueries);
+
+    try {
+      const result = await query.getMany();
+
+      return result;
+    } catch (error) {
+      this.filterError(error);
+    }
+  }
 
   /**
    * Get many by queryParams as a condition and return a list of results with meta data for pagination purpose
@@ -780,8 +883,11 @@ export default abstract class ApiCrud<T> {
   public async getManyByRelationsWithMeta(
     queryParams: TApiFeaturesDto<T>,
     extendQueries?: TExtendFromQueries<T>,
+    excludeAliases?: string[],
   ): Promise<WithMeta<T[]>> {
-    const query = this.createQuery(queryParams, extendQueries);
+    const query = this.createQuery(queryParams, extendQueries, {
+      exclude: excludeAliases,
+    });
     try {
       const result = await query.getManyAndCount();
       return this.toWithMeta(result, queryParams);
@@ -793,9 +899,12 @@ export default abstract class ApiCrud<T> {
   public async findOneByParamsWithDefaultRelations(
     queryParams: TApiFeaturesDto<T>,
     extendFromQueries?: TExtendFromQueries<T>,
+    excludeAliases?: string[],
   ): Promise<T> {
     const { limit, page, sort, search, ...conditions } = queryParams;
-    const query = this.createQuery(queryParams, extendFromQueries);
+    const query = this.createQuery(queryParams, extendFromQueries, {
+      exclude: excludeAliases,
+    });
     const result = await query.getOne();
 
     if (!result)
