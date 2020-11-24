@@ -8,6 +8,7 @@ import {
   FindOneOptions,
   FindConditions,
   FindOperator,
+  EntitySchema,
 } from 'typeorm';
 import { TApiFeaturesDto, WithMeta } from '../interfaces/api-features';
 import {
@@ -32,6 +33,11 @@ interface IApiCrudOptions {
   alias: string;
 
   /**
+   * An array of column name which is not prefixed with default alias setting
+   */
+  excludeAlias?: string[];
+
+  /**
    * An array of properties which will be removed from query generated from getManyWithMeta and getManyByRelationsWithMeta
    */
   reservedFields?: string[];
@@ -40,6 +46,11 @@ interface IApiCrudOptions {
    * An array of relations which is used for leftJoin operator
    */
   relations?: IRelation | IRelation[];
+
+  /**
+   * Optional search path on relation
+   */
+  searchOnRelation?: string;
 
   /**
    * Enable auto validation on update and delete query
@@ -154,6 +165,8 @@ export default abstract class ApiCrud<T> {
 
   private schema: new (...args: any) => T;
 
+  private relationsMeta: { path: string; meta: Record<string, string> }[];
+
   constructor(repository: Repository<T>, option: IApiCrudOptions) {
     this.repository = repository;
 
@@ -254,7 +267,9 @@ export default abstract class ApiCrud<T> {
    * Retrive columns's type from Repository's metadata
    */
   private reflectMetaData() {
+    // console.log('get meta',this.repository.manager.connection.entityMetadatas[0].relations);
     this.schema = this.repository.target as any;
+    // console.log(this.repository.metadata.relations);
 
     const metadata = this.repository.metadata;
 
@@ -269,6 +284,22 @@ export default abstract class ApiCrud<T> {
       }),
       {},
     );
+
+    // reflect relations meta
+    this.relationsMeta = this.repository.metadata.relations.map(r => ({
+      path: r.inverseEntityMetadata.name.toLowerCase(),
+      meta: r.inverseEntityMetadata.columns.reduce(
+        (acc, cur) => ({
+          ...acc,
+          [cur.propertyName]: cur.isArray
+            ? 'array'
+            : typeof cur.type === 'function'
+            ? cur.type.name.toLowerCase()
+            : cur.type,
+        }),
+        {},
+      ),
+    }));
   }
 
   /**
@@ -367,7 +398,9 @@ export default abstract class ApiCrud<T> {
    * @param key
    */
   private withAlias(key: string): string {
-    return `${this.alias}.${key}`;
+    return this.options.excludeAlias && this.options.excludeAlias.includes(key)
+      ? key
+      : `${this.alias}.${key}`;
   }
 
   /**
@@ -471,14 +504,36 @@ export default abstract class ApiCrud<T> {
     query: SelectQueryBuilder<T>,
     queryParams: TApiFeaturesDto<T>,
   ) {
-    if (this.meta.searchWeights !== 'tsvector') return;
+    console.log('set search');
+
+    let searchFieldWithAlias = '';
+    const { searchOnRelation } = this.options;
+
+    console.log(searchOnRelation);
+    console.log(this.relationsMeta);
+
+    if (searchOnRelation) {
+      const idx = this.relationsMeta.findIndex(
+        e => e.path === searchOnRelation,
+      );
+
+      console.log('INDX', idx);
+
+      if (
+        idx >= 0 &&
+        this.relationsMeta[idx].meta.searchWeights === 'tsvector'
+      ) {
+        console.log('goto here');
+        searchFieldWithAlias = `${searchOnRelation}.searchWeights`;
+      } else return;
+    } else {
+      if (this.meta.searchWeights !== 'tsvector') return;
+      searchFieldWithAlias = this.withAlias('searchWeights');
+    }
 
     const { search } = queryParams;
 
-    console.log(search);
-
-    const searchFieldWithAlias = this.withAlias('searchWeights');
-
+    console.log('search', search);
     console.log(searchFieldWithAlias);
 
     if (search) {
