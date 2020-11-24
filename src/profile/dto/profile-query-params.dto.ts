@@ -46,6 +46,10 @@ export class ProfileQueryParamsDto implements TApiFeaturesDto<Profile> {
 
   @IsOptional()
   @IsStringOrArray()
+  position?: any;
+
+  @IsOptional()
+  @IsStringOrArray()
   major?: any;
 
   @IsOptional()

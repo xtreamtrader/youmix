@@ -32,7 +32,6 @@ export class ProfileController {
   // async getDemoProfiles(): Promise<Profile[]> {
   //   return await this.profileService.findAll();
   // }
-
   @Patch()
   async updateOwn(
     @Body() createOrUpdateProfileDto: CreateOrUpdateProfileDto,
@@ -56,14 +55,6 @@ export class ProfileController {
     @Query() query: ProfileQueryParamsDto,
   ): Promise<WithMeta<Profile[]>> {
     console.log(query);
-    const profilesWithMeta = await this.profileService.findAllNotMe(
-      user.username,
-      query,
-    );
-
-    return {
-      meta: profilesWithMeta.meta,
-      data: plainToClass(Profile, profilesWithMeta.data),
-    };
+    return await this.profileService.findAllNotMe(user.username, query);
   }
 }
