@@ -267,9 +267,7 @@ export default abstract class ApiCrud<T> {
    * Retrive columns's type from Repository's metadata
    */
   private reflectMetaData() {
-    // console.log('get meta',this.repository.manager.connection.entityMetadatas[0].relations);
     this.schema = this.repository.target as any;
-    // console.log(this.repository.metadata.relations);
 
     const metadata = this.repository.metadata;
 
@@ -504,26 +502,18 @@ export default abstract class ApiCrud<T> {
     query: SelectQueryBuilder<T>,
     queryParams: TApiFeaturesDto<T>,
   ) {
-    console.log('set search');
-
     let searchFieldWithAlias = '';
     const { searchOnRelation } = this.options;
-
-    console.log(searchOnRelation);
-    console.log(this.relationsMeta);
 
     if (searchOnRelation) {
       const idx = this.relationsMeta.findIndex(
         e => e.path === searchOnRelation,
       );
 
-      console.log('INDX', idx);
-
       if (
         idx >= 0 &&
         this.relationsMeta[idx].meta.searchWeights === 'tsvector'
       ) {
-        console.log('goto here');
         searchFieldWithAlias = `${searchOnRelation}.searchWeights`;
       } else return;
     } else {
@@ -532,9 +522,6 @@ export default abstract class ApiCrud<T> {
     }
 
     const { search } = queryParams;
-
-    console.log('search', search);
-    console.log(searchFieldWithAlias);
 
     if (search) {
       query
@@ -556,8 +543,6 @@ export default abstract class ApiCrud<T> {
     query: SelectQueryBuilder<T>,
     queryParams: TApiFeaturesDto<T>,
   ) {
-    console.log('goto here');
-    console.log(this.meta);
     const filters = (({ sort, limit, page, search, ...o }) => o)(queryParams);
 
     if (
