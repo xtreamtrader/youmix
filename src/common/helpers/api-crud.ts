@@ -105,6 +105,14 @@ interface IRelationExposedLevel {
   include?: string[];
   exclude?: string[];
 }
+interface ICreateFindOne {
+  findOne?: boolean;
+}
+
+interface IPaginationOnRoot {
+  usePaginationOnParent?: boolean;
+  useGetManyAndCount?: boolean;
+}
 
 /**
  * A utility type allows passing TypeOrm' query under a single array and adding it to the SelectQueryBuilder object.
@@ -314,6 +322,7 @@ export default abstract class ApiCrud<T> {
       !validateOptions.hasRoleValidator
     )
       return;
+
     if (!this.autoValidationOnUD) return;
 
     const { preValidator, postValidator } = validateOptions;
@@ -395,31 +404,84 @@ export default abstract class ApiCrud<T> {
    * Return a property name prefixed with defined alias option
    * @param key
    */
-  private withAlias(key: string): string {
+  private withAlias(key: string, isSubAlias?: boolean): string {
     return this.options.excludeAlias && this.options.excludeAlias.includes(key)
       ? key
+      : isSubAlias
+      ? `sub${this.alias}.${key}`
       : `${this.alias}.${key}`;
   }
 
   /**
    * Interal method to create a SelectQueryBuilder
+   *
+   * By default: create single query by SelectQueryBuilder to retrieve data
+   *
+   * If `options.usePaginationOnParent` is set to true and there is at least 1 relation: create 3 query, the main one will be queried directly to the database to retrieve data,
+   * the remainder is to
+   * generate a subQuery which should be passed into expressionMap.mainAlias.subQuery of the main query for pagination purpose. If `options.useGetManyAndCount` create custom query
+   * to get the exact count value
+   *
    * @param queryParams
    * @param extendFromQueries
+   * @param options
    */
   private createQuery(
     queryParams: TApiFeaturesDto<T>,
     extendFromQueries?: TExtendFromQueries<T>,
-    hasRelation?: IRelationExposedLevel,
+    options?: IRelationExposedLevel & ICreateFindOne & IPaginationOnRoot,
   ): SelectQueryBuilder<T> {
+    if (options.usePaginationOnParent && this.options.relations) {
+      const mainQuery = this.repository.createQueryBuilder(this.alias);
+
+      const subQuery = this.repository.manager.connection
+        .createQueryBuilder()
+        .select(this.alias)
+        .from(qb => {
+          // TODO should be path instead of alias
+          qb.from(this.alias, `sub${this.alias}`);
+          this.setFilterConditions(qb, queryParams, true);
+          this.setOrderBy(qb, queryParams, true);
+          this.setSearchParam(qb, queryParams, true);
+          this.setPagination(qb, queryParams);
+
+          return qb;
+        }, this.alias);
+
+      this.setRelations(mainQuery, options);
+
+      if (extendFromQueries)
+        this.setExtendFromQueries(mainQuery, extendFromQueries);
+
+      mainQuery.expressionMap.mainAlias.subQuery =
+        subQuery.expressionMap.mainAlias.subQuery;
+
+      if (options.useGetManyAndCount) {
+        const query = this.repository.createQueryBuilder(this.alias);
+
+        this.setRelations(query, options);
+
+        if (extendFromQueries)
+          this.setExtendFromQueries(query, extendFromQueries);
+
+        this.setFilterConditions(query, queryParams);
+        this.setSearchParam(query, queryParams);
+
+        (mainQuery as any).executeCountQuery =  (mainQuery as any).executeCountQuery.bind(query);
+      }
+
+      return mainQuery;
+    }
+
     const query = this.repository.createQueryBuilder(this.alias);
 
-    this.setRelations(query, hasRelation);
+    this.setRelations(query, options);
 
     if (extendFromQueries) this.setExtendFromQueries(query, extendFromQueries);
 
     this.setFilterConditions(query, queryParams);
     this.setOrderBy(query, queryParams);
-    this.setPagination(query, queryParams);
+    this.setPagination(query, queryParams, options);
     this.setSearchParam(query, queryParams);
 
     return query;
@@ -454,19 +516,22 @@ export default abstract class ApiCrud<T> {
   private setOrderBy(
     query: SelectQueryBuilder<T>,
     queryParams: TApiFeaturesDto<T>,
+    useSubAlias?: boolean,
   ) {
+    // TODO allow multiple sort conditions
+
     // Set default Sort Option
     if (!queryParams.sort) {
-      query.orderBy(this.withAlias('createdAt'), 'ASC');
+      query.orderBy(this.withAlias('createdAt', useSubAlias), 'ASC');
       return;
     }
     if (queryParams.sort.startsWith('-')) {
       const sortFields = queryParams.sort.split('-')[1];
-      query.orderBy(this.withAlias(sortFields), 'DESC');
+      query.orderBy(this.withAlias(sortFields, useSubAlias), 'DESC');
       return;
     }
 
-    query.orderBy(this.withAlias(queryParams.sort), 'ASC');
+    query.orderBy(this.withAlias(queryParams.sort, useSubAlias), 'ASC');
   }
 
   //TODO Add default limit options
@@ -478,7 +543,11 @@ export default abstract class ApiCrud<T> {
   private setPagination(
     query: SelectQueryBuilder<T>,
     queryParams: TApiFeaturesDto<T>,
+    options?: {
+      findOne?: boolean;
+    },
   ) {
+    if (options?.findOne) return;
     let { limit = 30, page = 1 } = queryParams;
 
     // Convert limit to type of integer, validate for maximum value
@@ -489,7 +558,7 @@ export default abstract class ApiCrud<T> {
     const _page = parseInt(page as string);
     page = _page !== NaN && _page > 0 ? _page : 1;
 
-    query.offset((page - 1) * limit).limit(limit);
+    query.skip((page - 1) * limit).take(limit);
 
     queryParams.limit = limit;
     queryParams.page = page;
@@ -501,6 +570,7 @@ export default abstract class ApiCrud<T> {
   private setSearchParam(
     query: SelectQueryBuilder<T>,
     queryParams: TApiFeaturesDto<T>,
+    useSubAlias?: boolean,
   ) {
     let searchFieldWithAlias = '';
     const { searchOnRelation } = this.options;
@@ -518,7 +588,7 @@ export default abstract class ApiCrud<T> {
       } else return;
     } else {
       if (this.meta.searchWeights !== 'tsvector') return;
-      searchFieldWithAlias = this.withAlias('searchWeights');
+      searchFieldWithAlias = this.withAlias('searchWeights', useSubAlias);
     }
 
     const { search } = queryParams;
@@ -542,6 +612,7 @@ export default abstract class ApiCrud<T> {
   private setFilterConditions(
     query: SelectQueryBuilder<T>,
     queryParams: TApiFeaturesDto<T>,
+    useSubAlias?: boolean,
   ) {
     const filters = (({ sort, limit, page, search, ...o }) => o)(queryParams);
 
@@ -555,7 +626,7 @@ export default abstract class ApiCrud<T> {
 
     const queryBrackets = new Brackets(q => {
       Object.keys(filters).forEach((key, keyIdx) => {
-        const keyWithAlias = this.withAlias(key);
+        const keyWithAlias = this.withAlias(key, useSubAlias);
 
         if (Array.isArray(filters[key])) {
           if (filters[key].length === 0) return;
@@ -681,6 +752,7 @@ export default abstract class ApiCrud<T> {
   private setRelations(
     query: SelectQueryBuilder<T>,
     hasRelation?: IRelationExposedLevel,
+    useSubAlias?: boolean,
   ): void {
     if (!this.options.relations) return;
     const { include, exclude } = hasRelation || {
@@ -693,7 +765,7 @@ export default abstract class ApiCrud<T> {
       this.options.relations.forEach(({ prop, alias, nestedRelation }) => {
         if (exclude && exclude.includes(alias)) return;
 
-        const propWithAlias = this.withAlias(prop);
+        const propWithAlias = this.withAlias(prop, useSubAlias);
         query.leftJoinAndSelect(propWithAlias, alias);
 
         if (
@@ -716,7 +788,7 @@ export default abstract class ApiCrud<T> {
 
     if (exclude && exclude.includes(alias)) return;
 
-    const propWithAlias = this.withAlias(prop);
+    const propWithAlias = this.withAlias(prop, useSubAlias);
     query.leftJoinAndSelect(propWithAlias, alias);
 
     if (
@@ -927,6 +999,8 @@ export default abstract class ApiCrud<T> {
   ): Promise<WithMeta<T[]>> {
     const query = this.createQuery(queryParams, extendQueries, {
       exclude: excludeAliases,
+      usePaginationOnParent: true,
+      useGetManyAndCount: true,
     });
     try {
       const result = await query.getManyAndCount();
@@ -944,6 +1018,7 @@ export default abstract class ApiCrud<T> {
     const { limit, page, sort, search, ...conditions } = queryParams;
     const query = this.createQuery(queryParams, extendFromQueries, {
       exclude: excludeAliases,
+      findOne: true,
     });
     const result = await query.getOne();
 
