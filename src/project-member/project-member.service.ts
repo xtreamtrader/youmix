@@ -131,6 +131,11 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
     return this.getManyByRelationsWithMeta(
       { ...query, projectId },
       this.accessMembersListByUserRoleOption(user, projectId),
+      {
+        usePaginationOnParent: true,
+        useGetManyAndCount: true,
+        useNativeSkipAndOffset: true,
+      },
     );
   }
   /**

@@ -1,7 +1,7 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Project } from './project.entity';
-import { Repository } from 'typeorm';
+import { Repository, QueryBuilder } from 'typeorm';
 import { ProjectMember } from '../project-member/project-member.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { assignPartialObjectToEntity } from 'src/common/helpers/entity.helper';
@@ -10,6 +10,9 @@ import { User } from 'src/user/user.entity';
 import { EAccountRole } from 'src/common/interfaces/account-role.interface';
 import { WithMeta, TApiFeaturesDto } from 'src/common/interfaces/api-features';
 import ApiCrud, { TExtendFromQueries } from 'src/common/helpers/api-crud';
+import e from 'express';
+import { plainToClass } from 'class-transformer';
+import { RawSqlResultsToEntityTransformer } from 'typeorm/query-builder/transformer/RawSqlResultsToEntityTransformer';
 
 @Injectable()
 export class ProjectService extends ApiCrud<Project> {
@@ -60,14 +63,20 @@ export class ProjectService extends ApiCrud<Project> {
     projectId: string,
     acl: TExtendFromQueries<any>,
   ): Promise<Project> {
-    return this.findOneByParamsWithDefaultRelations({ id: projectId }, acl, ['profile']);
+    return this.findOneByParamsWithDefaultRelations({ id: projectId }, acl, [
+      'profile',
+    ]);
   }
 
   async getProjects(
     query: TApiFeaturesDto<Project>,
     acl: TExtendFromQueries<any>,
   ): Promise<WithMeta<Project[]>> {
-    return this.getManyByRelationsWithMeta(query, acl, ['profile']);
+    return this.getManyByRelationsWithMeta(query, acl, {
+      exclude: ['profile'],
+      usePaginationOnParent: true,
+      useGetManyAndCount: true,
+    });
   }
 
   /**
