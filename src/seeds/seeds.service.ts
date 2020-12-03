@@ -112,6 +112,10 @@ export class SeedsService {
       .filter(() => Math.random() - 0.7 > 0);
   }
 
+  private randomInRange(min, max): number {
+    return Math.floor(Math.random() * (max - min)) + min;
+  }
+
   /**
    * Seed a number of user -> profile (cascade enabled from entity level)
    * @param count
@@ -239,8 +243,8 @@ export class SeedsService {
       project.status = 'SEED' as any;
 
       const profiles = await this.profileRepository.find({
-        where: `random() < 0.005 and username != '${owners[i].username}'`,
-        take: 5,
+        where: `random() < 0.4 and username != '${owners[i].username}'`,
+        take: this.randomInRange(15, 100),
       });
 
       const profileAsMembers = profiles.map(profile => ({
