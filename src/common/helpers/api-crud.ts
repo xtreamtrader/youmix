@@ -173,6 +173,8 @@ export default abstract class ApiCrud<T> {
 
   private schema: new (...args: any) => T;
 
+  private tablePath: string;
+
   private relationsMeta: { path: string; meta: Record<string, string> }[];
 
   constructor(repository: Repository<T>, option: IApiCrudOptions) {
@@ -278,6 +280,8 @@ export default abstract class ApiCrud<T> {
     this.schema = this.repository.target as any;
 
     const metadata = this.repository.metadata;
+
+    this.tablePath = metadata.tablePath;
 
     this.meta = metadata.columns.reduce(
       (acc, cur) => ({
@@ -431,15 +435,14 @@ export default abstract class ApiCrud<T> {
     extendFromQueries?: TExtendFromQueries<T>,
     options?: IRelationExposedLevel & ICreateFindOne & IPaginationOnRoot,
   ): SelectQueryBuilder<T> {
-    if (options.usePaginationOnParent && this.options.relations) {
+    if (options?.usePaginationOnParent && this.options.relations) {
       const mainQuery = this.repository.createQueryBuilder(this.alias);
 
       const subQuery = this.repository.manager.connection
         .createQueryBuilder()
         .select(this.alias)
         .from(qb => {
-          // TODO should be path instead of alias
-          qb.from(this.alias, `sub${this.alias}`);
+          qb.from(this.tablePath, `sub${this.alias}`);
           this.setFilterConditions(qb, queryParams, true);
           this.setOrderBy(qb, queryParams, true);
           this.setSearchParam(qb, queryParams, true);
@@ -995,13 +998,9 @@ export default abstract class ApiCrud<T> {
   public async getManyByRelationsWithMeta(
     queryParams: TApiFeaturesDto<T>,
     extendQueries?: TExtendFromQueries<T>,
-    excludeAliases?: string[],
+    options?: IPaginationOnRoot & IRelationExposedLevel
   ): Promise<WithMeta<T[]>> {
-    const query = this.createQuery(queryParams, extendQueries, {
-      exclude: excludeAliases,
-      usePaginationOnParent: true,
-      useGetManyAndCount: true,
-    });
+    const query = this.createQuery(queryParams, extendQueries, options);
     try {
       const result = await query.getManyAndCount();
       return this.toWithMeta(result, queryParams);
