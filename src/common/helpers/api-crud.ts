@@ -9,6 +9,7 @@ import {
   FindConditions,
   FindOperator,
   EntitySchema,
+  OrderByCondition,
 } from 'typeorm';
 import { TApiFeaturesDto, WithMeta } from '../interfaces/api-features';
 import {
@@ -19,6 +20,8 @@ import {
 } from '@nestjs/common';
 import { assignPartialObjectToEntity } from './entity.helper';
 import { plainToClass } from 'class-transformer';
+import { DriverUtils } from 'typeorm/driver/DriverUtils';
+import { Profile } from 'src/profile/profile.entity';
 
 interface IRelation {
   prop: string;
@@ -110,8 +113,20 @@ interface ICreateFindOne {
 }
 
 interface IPaginationOnRoot {
+  /**
+   * Create a nested subquery from-clause to limit records on the parent
+   */
   usePaginationOnParent?: boolean;
+
+  /**
+   * Override default executeGetCount() of TypeOrm
+   */
   useGetManyAndCount?: boolean;
+
+  /**
+   * Apply skip, limit on the main query instead of the root
+   */
+  useNativeSkipAndOffset?: boolean;
 }
 
 /**
@@ -176,6 +191,104 @@ export default abstract class ApiCrud<T> {
   private tablePath: string;
 
   private relationsMeta: { path: string; meta: Record<string, string> }[];
+
+  private createOrderByCombinedWithSelectExpression(
+    this: SelectQueryBuilder<T>,
+    parentAlias: string,
+  ): [string, OrderByCondition] {
+    // if table has a default order then apply it
+    const orderBys = this.expressionMap.allOrderBys;
+    const selectString = Object.keys(orderBys)
+      .map(orderCriteria => {
+        if (
+          orderCriteria.indexOf('.') !== -1 &&
+          orderCriteria.indexOf('(') === -1
+        ) {
+          const [aliasName, propertyPath] = orderCriteria.split('.');
+          const alias = this.expressionMap.findAliasByName(aliasName);
+          const column = alias.metadata.findColumnWithPropertyName(
+            propertyPath,
+          );
+          return (
+            this.escape(parentAlias) +
+            '.' +
+            this.escape(
+              DriverUtils.buildColumnAlias(
+                this.connection.driver,
+                aliasName,
+                column!.databaseName,
+              ),
+            )
+          );
+        } else {
+          if (
+            this.expressionMap.selects.find(
+              select =>
+                select.selection === orderCriteria ||
+                select.aliasName === orderCriteria,
+            )
+          )
+            return this.escape(parentAlias) + '.' + orderCriteria;
+
+          return '';
+        }
+      })
+      .join(', ');
+
+    const orderByObject: OrderByCondition = {};
+    Object.keys(orderBys).forEach(orderCriteria => {
+      // if (orderCriteria.indexOf('(') !== -1) {
+      //   console.log('get here');
+      //   const betweenFirstParentheseAndComma = orderCriteria
+      //     .split('(')[1]
+      //     .split(',')[0];
+      //   const [
+      //     aliasName,
+      //     propertyPath,
+      //   ] = betweenFirstParentheseAndComma.split('.');
+      //   const alias = this.expressionMap.findAliasByName(aliasName);
+      //   const column = alias.metadata.findColumnWithPropertyName(
+      //     propertyPath,
+      //   );
+      //   orderByObject[`${aliasName}.${column.databaseName}`] =
+      //     orderBys[orderCriteria];
+      // } else
+      if (
+        orderCriteria.indexOf('.') !== -1 &&
+        orderCriteria.indexOf('(') === -1
+      ) {
+        const [aliasName, propertyPath] = orderCriteria.split('.');
+        const alias = this.expressionMap.findAliasByName(aliasName);
+        const column = alias.metadata.findColumnWithPropertyName(propertyPath);
+        orderByObject[
+          this.escape(parentAlias) +
+            '.' +
+            this.escape(
+              DriverUtils.buildColumnAlias(
+                this.connection.driver,
+                aliasName,
+                column!.databaseName,
+              ),
+            )
+        ] = orderBys[orderCriteria];
+      } else {
+        if (
+          this.expressionMap.selects.find(
+            select =>
+              select.selection === orderCriteria ||
+              select.aliasName === orderCriteria,
+          )
+        ) {
+          orderByObject[this.escape(parentAlias) + '.' + orderCriteria] =
+            orderBys[orderCriteria];
+        } else {
+          orderByObject[orderCriteria] = orderBys[orderCriteria];
+        }
+      }
+    });
+
+    return [selectString, orderByObject];
+  }
 
   constructor(repository: Repository<T>, option: IApiCrudOptions) {
     this.repository = repository;
@@ -446,15 +559,21 @@ export default abstract class ApiCrud<T> {
           this.setFilterConditions(qb, queryParams, true);
           this.setOrderBy(qb, queryParams, true);
           this.setSearchParam(qb, queryParams, true);
-          this.setPagination(qb, queryParams);
 
+          if (!options.useNativeSkipAndOffset)
+            this.setPagination(qb, queryParams);
           return qb;
         }, this.alias);
+
+      if (options.useNativeSkipAndOffset)
+        this.setPagination(mainQuery, queryParams);
 
       this.setRelations(mainQuery, options);
 
       if (extendFromQueries)
         this.setExtendFromQueries(mainQuery, extendFromQueries);
+
+      this.setSearchParam(mainQuery, queryParams);
 
       mainQuery.expressionMap.mainAlias.subQuery =
         subQuery.expressionMap.mainAlias.subQuery;
@@ -468,14 +587,20 @@ export default abstract class ApiCrud<T> {
           this.setExtendFromQueries(query, extendFromQueries);
 
         this.setFilterConditions(query, queryParams);
-        this.setSearchParam(query, queryParams);
+        this.setSearchParam(query, queryParams, false, true);
 
-        (mainQuery as any).executeCountQuery =  (mainQuery as any).executeCountQuery.bind(query);
+        (mainQuery as any).executeCountQuery = (mainQuery as any).executeCountQuery.bind(
+          query,
+        );
+
+        // console.log(mainQuery.getCount())
       }
 
+      // console.log(mainQuery.printSql());
       return mainQuery;
     }
 
+    // console.log('should not here');
     const query = this.repository.createQueryBuilder(this.alias);
 
     this.setRelations(query, options);
@@ -561,7 +686,7 @@ export default abstract class ApiCrud<T> {
     const _page = parseInt(page as string);
     page = _page !== NaN && _page > 0 ? _page : 1;
 
-    query.skip((page - 1) * limit).take(limit);
+    query.offset((page - 1) * limit).limit(limit);
 
     queryParams.limit = limit;
     queryParams.page = page;
@@ -574,6 +699,7 @@ export default abstract class ApiCrud<T> {
     query: SelectQueryBuilder<T>,
     queryParams: TApiFeaturesDto<T>,
     useSubAlias?: boolean,
+    noOrder?: boolean,
   ) {
     let searchFieldWithAlias = '';
     const { searchOnRelation } = this.options;
@@ -585,8 +711,10 @@ export default abstract class ApiCrud<T> {
 
       if (
         idx >= 0 &&
-        this.relationsMeta[idx].meta.searchWeights === 'tsvector'
+        this.relationsMeta[idx].meta.searchWeights === 'tsvector' &&
+        !useSubAlias
       ) {
+        // TODO Get database column path in reflectMetadata()
         searchFieldWithAlias = `${searchOnRelation}.searchWeights`;
       } else return;
     } else {
@@ -597,15 +725,138 @@ export default abstract class ApiCrud<T> {
     const { search } = queryParams;
 
     if (search) {
-      query
-        .andWhere(
-          `${searchFieldWithAlias} @@ plainto_tsquery(unaccent('${search}'))`,
-        )
-        .orderBy(
-          `ts_rank(
-          ${searchFieldWithAlias}, plainto_tsquery(unaccent('${search}')))`,
+      query.andWhere(
+        `${searchFieldWithAlias} @@ plainto_tsquery(unaccent('${search}'))`,
+      );
+
+      // console.log(query.expressionMap.aliases);
+      // query.expressionMap.aliases.push({
+      //   name: `ts_rank(profile`,
+      //   type: 'other',
+      //   // _metadata: this.repository.manager.connection.getMetadata(
+      //   //   searchFieldWithAlias.split('.')[0],
+      //   // ),
+      //   target: Profile,
+      //   metadata: this.repository.manager.connection.getMetadata(
+      //     searchFieldWithAlias.split('.')[0],
+      //   ),
+      //   tablePath: 'profile',
+      //   hasMetadata: true,
+      // });
+
+      if (!noOrder) {
+        query.addOrderBy(
+          `ts_rank(${searchFieldWithAlias}, plainto_tsquery(unaccent('${search}')))`,
           'DESC',
         );
+      }
+
+      Object.defineProperty(
+        query,
+        'createOrderByCombinedWithSelectExpression',
+        {
+          value: this.createOrderByCombinedWithSelectExpression,
+          // value(parentAlias) {
+          //   // if table has a default order then apply it
+          //   const orderBys = this.expressionMap.allOrderBys;
+          //   const selectString = Object.keys(orderBys)
+          //     .map(orderCriteria => {
+          //       if (
+          //         orderCriteria.indexOf('.') !== -1 &&
+          //         orderCriteria.indexOf('(') === -1
+          //       ) {
+          //         const [aliasName, propertyPath] = orderCriteria.split('.');
+          //         const alias = this.expressionMap.findAliasByName(aliasName);
+          //         const column = alias.metadata.findColumnWithPropertyName(
+          //           propertyPath,
+          //         );
+          //         return (
+          //           this.escape(parentAlias) +
+          //           '.' +
+          //           this.escape(
+          //             DriverUtils.buildColumnAlias(
+          //               this.connection.driver,
+          //               aliasName,
+          //               column!.databaseName,
+          //             ),
+          //           )
+          //         );
+          //       } else {
+          //         if (
+          //           this.expressionMap.selects.find(
+          //             select =>
+          //               select.selection === orderCriteria ||
+          //               select.aliasName === orderCriteria,
+          //           )
+          //         )
+          //           return this.escape(parentAlias) + '.' + orderCriteria;
+
+          //         return '';
+          //       }
+          //     })
+          //     .join(', ');
+
+          //   console.log('select string after first order by', selectString);
+          //   const orderByObject: OrderByCondition = {};
+          //   Object.keys(orderBys).forEach(orderCriteria => {
+          //     // if (orderCriteria.indexOf('(') !== -1) {
+          //     //   console.log('get here');
+          //     //   const betweenFirstParentheseAndComma = orderCriteria
+          //     //     .split('(')[1]
+          //     //     .split(',')[0];
+          //     //   const [
+          //     //     aliasName,
+          //     //     propertyPath,
+          //     //   ] = betweenFirstParentheseAndComma.split('.');
+          //     //   const alias = this.expressionMap.findAliasByName(aliasName);
+          //     //   const column = alias.metadata.findColumnWithPropertyName(
+          //     //     propertyPath,
+          //     //   );
+          //     //   orderByObject[`${aliasName}.${column.databaseName}`] =
+          //     //     orderBys[orderCriteria];
+          //     // } else
+          //     if (
+          //       orderCriteria.indexOf('.') !== -1 &&
+          //       orderCriteria.indexOf('(') === -1
+          //     ) {
+          //       const [aliasName, propertyPath] = orderCriteria.split('.');
+          //       const alias = this.expressionMap.findAliasByName(aliasName);
+          //       const column = alias.metadata.findColumnWithPropertyName(
+          //         propertyPath,
+          //       );
+          //       orderByObject[
+          //         this.escape(parentAlias) +
+          //           '.' +
+          //           this.escape(
+          //             DriverUtils.buildColumnAlias(
+          //               this.connection.driver,
+          //               aliasName,
+          //               column!.databaseName,
+          //             ),
+          //           )
+          //       ] = orderBys[orderCriteria];
+          //     } else {
+          //       if (
+          //         this.expressionMap.selects.find(
+          //           select =>
+          //             select.selection === orderCriteria ||
+          //             select.aliasName === orderCriteria,
+          //         )
+          //       ) {
+          //         orderByObject[
+          //           this.escape(parentAlias) + '.' + orderCriteria
+          //         ] = orderBys[orderCriteria];
+          //       } else {
+          //         orderByObject[orderCriteria] = orderBys[orderCriteria];
+          //       }
+          //     }
+          //   });
+
+          //   console.log(selectString, orderByObject);
+          //   return [selectString, orderByObject];
+          // },
+        },
+      );
     }
   }
 
@@ -998,7 +1249,7 @@ export default abstract class ApiCrud<T> {
   public async getManyByRelationsWithMeta(
     queryParams: TApiFeaturesDto<T>,
     extendQueries?: TExtendFromQueries<T>,
-    options?: IPaginationOnRoot & IRelationExposedLevel
+    options?: IPaginationOnRoot & IRelationExposedLevel,
   ): Promise<WithMeta<T[]>> {
     const query = this.createQuery(queryParams, extendQueries, options);
     try {
