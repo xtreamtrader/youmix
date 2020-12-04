@@ -30,12 +30,12 @@ export class ProjectSearching1606138118611 implements MigrationInterface {
     await queryRunner.query(
       `CREATE FUNCTION project_tsvector_search_trigger() RETURNS trigger AS $$
          begin
-          new.search_weights := setweight(to_tsvector(coalesce(unaccent(name), '')), 'A') || 
-                                    setweight(to_tsvector(coalesce(array_to_string(major, ','), '')), 'B') || 
-                                    setweight(to_tsvector(coalesce(unaccent(expertises), '')), 'B') || 
-                                    setweight(to_tsvector(coalesce(unaccent((description->'bio')::text), '')), 'D')|| 
-                                    setweight(to_tsvector(coalesce(unaccent((description->'summary')::text), '')), 'D')|| 
-                                    setweight(to_tsvector(coalesce(unaccent((description->'requirements')::text), '')), 'D');
+          new.search_weights := setweight(to_tsvector(coalesce(unaccent(new.name), '')), 'A') || 
+                                    setweight(to_tsvector(coalesce(array_to_string(new.major, ','), '')), 'B') || 
+                                    setweight(to_tsvector(coalesce(unaccent(new.expertises), '')), 'B') || 
+                                    setweight(to_tsvector(coalesce(unaccent((new.description->'bio')::text), '')), 'D')|| 
+                                    setweight(to_tsvector(coalesce(unaccent((new.description->'summary')::text), '')), 'D')|| 
+                                    setweight(to_tsvector(coalesce(unaccent((new.description->'requirements')::text), '')), 'D');
           return new;
         end
         $$ LANGUAGE plpgsql;
