@@ -1,11 +1,10 @@
 import { TApiFeaturesDto } from 'src/common/interfaces/api-features';
-import { ProjectMember } from './project-member.entity';
+import { ProjectMember } from '../project-member.entity';
 import {
   IsOptional,
   IsNumberString,
   Matches,
   IsString,
-  MinLength,
   MaxLength,
 } from 'class-validator';
 import { EProjectMemberRole } from 'src/project/project.interfaces';

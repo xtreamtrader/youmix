@@ -19,8 +19,7 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectMemberService } from 'src/project-member/project-member.service';
 import { ProjectMember } from 'src/project-member/project-member.entity';
 import { ProjectQueryParamsDto } from './dto/project-query-params.dto';
-import { SearchProjectMemberQueryParamsDto } from 'src/project-member/search-project-member-query-params.dto';
-import { query } from 'express';
+import { SearchProjectMemberQueryParamsDto } from 'src/project-member/dto/search-project-member-query-params.dto';
 
 @Controller('projects')
 export class ProjectController {
@@ -40,7 +39,11 @@ export class ProjectController {
     @Query()
     searchProjectMemberQueryParamsDto: SearchProjectMemberQueryParamsDto,
   ): Promise<WithMeta<ProjectMember[]>> {
-    return await this.projectMemberService.findMembers(user, projectId, searchProjectMemberQueryParamsDto);
+    return await this.projectMemberService.findMembers(
+      user,
+      projectId,
+      searchProjectMemberQueryParamsDto,
+    );
   }
 
   @Get('/:projectId/members/:username')
@@ -170,7 +173,9 @@ export class ProjectController {
       { id },
       null,
       {
-        validatorParams: [user],
+        validatorContext: {
+          user,
+        },
       },
     );
   }
@@ -181,7 +186,7 @@ export class ProjectController {
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<void> {
     await this.projectService.deleteOneByConditions({ id }, null, {
-      validatorParams: [user],
+      validatorContext: { user },
     });
   }
 }

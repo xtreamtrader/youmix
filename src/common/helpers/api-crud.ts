@@ -68,7 +68,11 @@ interface IApiCrudOptions {
   hasTransformWithMeta?: boolean;
 }
 
-interface IApiCrudValidatorOptions<T = any> {
+interface IApiCrudValidatorOptions<
+  T = any,
+  K extends IBaseValidatorContext<T> = any,
+  V extends IBaseTriggerOnPreValidationContext = any
+> {
   /**
    * Override the default autoValidationOnCUD
    */
@@ -77,12 +81,12 @@ interface IApiCrudValidatorOptions<T = any> {
   /**
    * An array of parameters which wil be passed into overrided validate function in derived class
    */
-  validatorParams?: any[];
+  validatorContext?: Omit<K, 'entity'>;
 
   /**
    * An array of parameters which will be passed into overrided triggerOnPreValidation to get entity from database
    */
-  triggerParams?: any[];
+  triggerContext?: V;
 
   /**
    * Perform a findOne operator before execute create method
@@ -95,13 +99,13 @@ interface IApiCrudValidatorOptions<T = any> {
    * A function which will be executed before the main validate function gets called
    * Throw an error if validation failed
    */
-  preValidator?: (...args: any[]) => void;
+  preValidator?: (...args: any[]) => Promise<void> | void;
 
   /**
    * A function which will be executed after the main validate function gets called
    * Throw an error if validation failed
    */
-  postValidator?: (...args: any[]) => void;
+  postValidator?: (...args: any[]) => Promise<void> | void;
 }
 
 interface IRelationExposedLevel {
@@ -146,6 +150,13 @@ export type TExtendFromQueries<T> =
   | TApiCrudQueryBuilderOption<T>[]
   | TQueriesToCallback<T>;
 
+export interface IBaseValidatorContext<T> {
+  entity: T;
+}
+
+export interface IBaseTriggerOnPreValidationContext {
+  [key: string]: any;
+}
 /**
  * An abstract Class for common CRUD use cases.
  *
@@ -153,7 +164,11 @@ export type TExtendFromQueries<T> =
  * (by given query object parsed from LHS Bracket-styled URL)
  * @example /?search=xin chào các bạn&age=12&age=19&name=something&limit=20&page=1&sort=-createdAt
  */
-export default abstract class ApiCrud<T> {
+export default abstract class ApiCrud<
+  T,
+  K extends IBaseValidatorContext<T> = any,
+  V extends IBaseTriggerOnPreValidationContext = any
+> {
   /**
    * A repository from TypeOrm
    */
@@ -319,13 +334,15 @@ export default abstract class ApiCrud<T> {
    * The value which is fetched from Database must be first in parameters
    * @param args
    */
-  protected abstract validateRole(entity: T, ...args: any): boolean;
+
+  protected abstract validateRole(context: K): boolean;
+  // protected abstract validateRole(entity: T, ...args: any): boolean;
 
   /**
    * @abstract
    * An abstract function to get entity from database and send it to validation pipeline
    */
-  protected abstract triggerOnPreValidation?(...args: any): Promise<T>;
+  protected abstract triggerOnPreValidation?(context: V): Promise<T>;
 
   /***********************************************************************************
    * PROTECTED METHODS
@@ -444,24 +461,23 @@ export default abstract class ApiCrud<T> {
 
     const { preValidator, postValidator } = validateOptions;
 
-    if (preValidator) preValidator();
+    if (preValidator) await Promise.resolve(preValidator);
 
     if (
       this.triggerOnPreValidation &&
-      validateOptions.triggerParams?.length > 0
+      validateOptions.triggerContext?.length > 0
     ) {
-      entity = await this.triggerOnPreValidation.call(
-        this,
-        ...validateOptions.triggerParams,
+      entity = await this.triggerOnPreValidation(
+        validateOptions.triggerContext,
       );
     }
 
-    if (
-      !this.validateRole.call(this, entity, ...validateOptions.validatorParams)
-    )
-      throw new ForbiddenException();
+    const { validatorContext } = validateOptions;
+    validatorContext.entity = entity;
 
-    if (postValidator) postValidator();
+    if (!this.validateRole(validatorContext)) throw new ForbiddenException();
+
+    if (postValidator) await Promise.resolve(postValidator);
   }
 
   /**
@@ -1130,7 +1146,7 @@ export default abstract class ApiCrud<T> {
    */
   public async create(
     obj: Partial<T>,
-    validateOptions?: IApiCrudValidatorOptions<T>,
+    validateOptions?: IApiCrudValidatorOptions<T, K, V>,
   ): Promise<T> {
     if (validateOptions?.hasRoleValidator) {
       if (!this.triggerOnPreValidation) return;
@@ -1172,7 +1188,7 @@ export default abstract class ApiCrud<T> {
     updateDto: Partial<T>,
     conditions?: FindConditions<T>,
     options?: FindOneOptions<T>,
-    validateOptions?: IApiCrudValidatorOptions,
+    validateOptions?: IApiCrudValidatorOptions<T, K, V>,
   ): Promise<T> {
     const record = await this.findOneByConditions(conditions, options);
 
@@ -1196,7 +1212,7 @@ export default abstract class ApiCrud<T> {
   public async deleteOneByConditions(
     conditions?: FindConditions<T>,
     options?: FindOneOptions<T>,
-    validateOptions?: IApiCrudValidatorOptions,
+    validateOptions?: IApiCrudValidatorOptions<T, K, V>,
     deleteOption?: {
       softDelete?: boolean;
     },
