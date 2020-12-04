@@ -1,14 +1,9 @@
-import {
-  Injectable,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ProjectMember } from './project-member.entity';
 import { Repository, In } from 'typeorm';
 import { EProjectMemberRole } from '../project/project.interfaces';
-import ApiCrud, {
-  TExtendFromQueries,
-} from 'src/common/helpers/api-crud';
+import ApiCrud, { TExtendFromQueries } from 'src/common/helpers/api-crud';
 import { User } from 'src/user/user.entity';
 import { EAccountRole } from 'src/common/interfaces/account-role.interface';
 import { WithMeta, TApiFeaturesDto } from 'src/common/interfaces/api-features';
@@ -58,6 +53,7 @@ export class ProjectMemberService extends ApiCrud<
    */
   validateRole(ctx: IProjectMemberValidatorContext): boolean {
     const { user, entity: projectMember, roles } = ctx;
+
     if (user.role === EAccountRole.ADMIN) return true;
 
     if (Array.isArray(roles) && roles.includes(projectMember.role)) return true;
@@ -269,7 +265,6 @@ export class ProjectMemberService extends ApiCrud<
       },
       null,
       {
-        // triggerParams: [projectId, user.username],
         validatorContext: {
           user,
           roles: [
