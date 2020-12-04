@@ -1,21 +1,18 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Project } from './project.entity';
-import { Repository, QueryBuilder } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ProjectMember } from '../project-member/project-member.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { assignPartialObjectToEntity } from 'src/common/helpers/entity.helper';
-import { EProjectStatus, EProjectMemberRole } from './project.interfaces';
+import { EProjectStatus, EProjectMemberRole, IProjectValidatorContext } from './project.interfaces';
 import { User } from 'src/user/user.entity';
 import { EAccountRole } from 'src/common/interfaces/account-role.interface';
 import { WithMeta, TApiFeaturesDto } from 'src/common/interfaces/api-features';
 import ApiCrud, { TExtendFromQueries } from 'src/common/helpers/api-crud';
-import e from 'express';
-import { plainToClass } from 'class-transformer';
-import { RawSqlResultsToEntityTransformer } from 'typeorm/query-builder/transformer/RawSqlResultsToEntityTransformer';
 
 @Injectable()
-export class ProjectService extends ApiCrud<Project> {
+export class ProjectService extends ApiCrud<Project, IProjectValidatorContext> {
   constructor(
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
@@ -87,7 +84,10 @@ export class ProjectService extends ApiCrud<Project> {
   async deleteOne(user: User, id: string): Promise<void> {
     const project = await this.findOneById(id);
 
-    if (!this.validateRole(project, user)) throw new ForbiddenException();
+    if (!this.validateRole({
+      entity: project,
+      user,
+    })) throw new ForbiddenException();
 
     await this.projectRepository.softDelete(project);
   }
@@ -95,10 +95,9 @@ export class ProjectService extends ApiCrud<Project> {
   protected triggerOnPreValidation: undefined;
 
   validateRole(
-    project: Project,
-    user: User,
-    role: 'OWNER' | 'MEMBER' = 'OWNER',
+    ctx: IProjectValidatorContext
   ): boolean {
+    const { user, role = EProjectMemberRole.OWNER, entity:project} = ctx;
     const isOwner = (username: string) => (e: ProjectMember) =>
       e.username === username && e.role === EProjectMemberRole.OWNER;
 
@@ -106,7 +105,7 @@ export class ProjectService extends ApiCrud<Project> {
       e.username === username;
 
     return (
-      (user.role === EAccountRole.ADMIN || role === 'OWNER'
+      (user.role === EAccountRole.ADMIN || role === EProjectMemberRole.OWNER
         ? project.members.some(isOwner(user.username))
         : project.members.some(isMember(user.username))) &&
       delete project.members

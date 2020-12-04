@@ -1,22 +1,27 @@
 import {
   Injectable,
   ForbiddenException,
-  ConflictException,
-  BadRequestException,
-  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ProjectMember } from './project-member.entity';
-import { Repository, In, Brackets } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { EProjectMemberRole } from '../project/project.interfaces';
-import ApiCrud, { TExtendFromQueries } from 'src/common/helpers/api-crud';
+import ApiCrud, {
+  TExtendFromQueries,
+} from 'src/common/helpers/api-crud';
 import { User } from 'src/user/user.entity';
 import { EAccountRole } from 'src/common/interfaces/account-role.interface';
 import { WithMeta, TApiFeaturesDto } from 'src/common/interfaces/api-features';
-import { Profile } from 'src/profile/profile.entity';
-
+import {
+  IProjectMemberValidatorContext,
+  IProjectMemberTriggerOnPreValidationContext,
+} from './project-member.interfaces';
 @Injectable()
-export class ProjectMemberService extends ApiCrud<ProjectMember> {
+export class ProjectMemberService extends ApiCrud<
+  ProjectMember,
+  IProjectMemberValidatorContext,
+  IProjectMemberTriggerOnPreValidationContext
+> {
   constructor(
     @InjectRepository(ProjectMember)
     private readonly projectMemberRepository: Repository<ProjectMember>,
@@ -29,12 +34,6 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
         alias: 'profile',
       },
     });
-
-    // console.log(
-    //   projectMemberRepository.metadata.relations.map(e => {
-
-    //   }),
-    // );
   }
 
   /**
@@ -43,9 +42,9 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
    * @param username
    */
   triggerOnPreValidation(
-    projectId: string,
-    username?: string,
+    context: IProjectMemberTriggerOnPreValidationContext,
   ): Promise<ProjectMember> {
+    const { username, projectId } = context;
     return username
       ? this.findOneByProjectIdAndUsername(projectId, username)
       : this.findOwnerByProjectId(projectId);
@@ -57,11 +56,8 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
    * @param user
    * @param roles
    */
-  validateRole(
-    projectMember: ProjectMember,
-    user: User,
-    roles?: EProjectMemberRole[],
-  ): boolean {
+  validateRole(ctx: IProjectMemberValidatorContext): boolean {
+    const { user, entity: projectMember, roles } = ctx;
     if (user.role === EAccountRole.ADMIN) return true;
 
     if (Array.isArray(roles) && roles.includes(projectMember.role)) return true;
@@ -99,6 +95,18 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
         )
         .orWhere(
           `members.projectId = :projectId AND members.username = :username)`,
+        )
+        .addOrderBy(
+          `CASE
+            WHEN members.role = 'OWNER' THEN 0
+            WHEN members.username = '${user.username}' then 1
+            WHEN members.role = 'GUESTMEMBER' THEN 2
+            WHEN members.role = 'OWNER' THEN 3
+            WHEN members.role = 'INVITED' THEN 4
+            ELSE 5
+          END
+          `,
+          'ASC',
         )
         .setParameters({
           projectId: projectId,
@@ -222,12 +230,15 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
 
     return this.create(member, {
       hasRoleValidator: true,
-      triggerParams: [projectId, user.username],
+      triggerContext: {
+        projectId,
+        username: user.username,
+      },
       findOneBeforeCreate: { projectId, username },
-      validatorParams: [
+      validatorContext: {
         user,
-        [EProjectMemberRole.OWNER, EProjectMemberRole.MEMBER],
-      ],
+        roles: [EProjectMemberRole.OWNER, EProjectMemberRole.MEMBER],
+      },
     });
   }
 
@@ -259,14 +270,14 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
       null,
       {
         // triggerParams: [projectId, user.username],
-        validatorParams: [
+        validatorContext: {
           user,
-          [
+          roles: [
             EProjectMemberRole.GUESTMEMBER,
             EProjectMemberRole.INVITED,
             EProjectMemberRole.MEMBER,
           ],
-        ],
+        },
       },
       {
         softDelete: false,
@@ -286,8 +297,11 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
       },
       null,
       {
-        triggerParams: [projectId, user.username],
-        validatorParams: [user, [EProjectMemberRole.OWNER]],
+        triggerContext: {
+          projectId,
+          username: user.username,
+        },
+        validatorContext: { user, roles: [EProjectMemberRole.OWNER] },
         postValidator: () => {
           if (user.username === username)
             throw new ForbiddenException(
@@ -329,8 +343,8 @@ export class ProjectMemberService extends ApiCrud<ProjectMember> {
       },
       null,
       {
-        triggerParams: [projectId, user.username],
-        validatorParams: [user, [EProjectMemberRole.OWNER]],
+        triggerContext: { projectId, username: user.username },
+        validatorContext: { user, roles: [EProjectMemberRole.OWNER] },
       },
     );
   }
