@@ -99,13 +99,13 @@ interface IApiCrudValidatorOptions<
    * A function which will be executed before the main validate function gets called
    * Throw an error if validation failed
    */
-  preValidator?: (...args: any[]) => Promise<void> | void;
+  preValidator?: () => Promise<void> | void;
 
   /**
    * A function which will be executed after the main validate function gets called
    * Throw an error if validation failed
    */
-  postValidator?: (...args: any[]) => Promise<void> | void;
+  postValidator?: (entity?: T) => Promise<void> | void;
 }
 
 interface IRelationExposedLevel {
@@ -459,14 +459,21 @@ export default abstract class ApiCrud<
 
     if (!this.autoValidationOnUD) return;
 
+    //TODO allow async pre-postValidator
     const { preValidator, postValidator } = validateOptions;
 
-    if (preValidator) await Promise.resolve(preValidator);
+    if (preValidator) {
+      if (preValidator.constructor.name === 'AsyncFunction')
+        try {
+          await preValidator.call(this);
+        } catch (error) {
+          throw error;
+        }
 
-    if (
-      this.triggerOnPreValidation &&
-      validateOptions.triggerContext?.length > 0
-    ) {
+      preValidator.call(this);
+    }
+
+    if (this.triggerOnPreValidation && validateOptions.triggerContext) {
       entity = await this.triggerOnPreValidation(
         validateOptions.triggerContext,
       );
@@ -477,7 +484,17 @@ export default abstract class ApiCrud<
 
     if (!this.validateRole(validatorContext)) throw new ForbiddenException();
 
-    if (postValidator) await Promise.resolve(postValidator);
+    if (postValidator) {
+      if (postValidator.constructor.name === 'AsyncFunction') {
+        try {
+          await postValidator.call(this, entity);
+        } catch (error) {
+          throw error;
+        }
+      } else {
+        postValidator.call(this, entity);
+      }
+    }
   }
 
   /**
