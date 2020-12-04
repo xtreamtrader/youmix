@@ -20,7 +20,6 @@ import { ProjectMemberService } from 'src/project-member/project-member.service'
 import { ProjectMember } from 'src/project-member/project-member.entity';
 import { ProjectQueryParamsDto } from './dto/project-query-params.dto';
 import { SearchProjectMemberQueryParamsDto } from 'src/project-member/dto/search-project-member-query-params.dto';
-import { query } from 'express';
 
 @Controller('projects')
 export class ProjectController {
