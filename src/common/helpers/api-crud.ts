@@ -459,7 +459,6 @@ export default abstract class ApiCrud<
 
     if (!this.autoValidationOnUD) return;
 
-    //TODO allow async pre-postValidator
     const { preValidator, postValidator } = validateOptions;
 
     if (preValidator) {
@@ -747,7 +746,6 @@ export default abstract class ApiCrud<
         this.relationsMeta[idx].meta.searchWeights === 'tsvector' &&
         !useSubAlias
       ) {
-        // TODO Get database column path in reflectMetadata()
         searchFieldWithAlias = `${searchOnRelation}.searchWeights`;
       } else return;
     } else {
@@ -789,105 +787,6 @@ export default abstract class ApiCrud<
         'createOrderByCombinedWithSelectExpression',
         {
           value: this.createOrderByCombinedWithSelectExpression,
-          // value(parentAlias) {
-          //   // if table has a default order then apply it
-          //   const orderBys = this.expressionMap.allOrderBys;
-          //   const selectString = Object.keys(orderBys)
-          //     .map(orderCriteria => {
-          //       if (
-          //         orderCriteria.indexOf('.') !== -1 &&
-          //         orderCriteria.indexOf('(') === -1
-          //       ) {
-          //         const [aliasName, propertyPath] = orderCriteria.split('.');
-          //         const alias = this.expressionMap.findAliasByName(aliasName);
-          //         const column = alias.metadata.findColumnWithPropertyName(
-          //           propertyPath,
-          //         );
-          //         return (
-          //           this.escape(parentAlias) +
-          //           '.' +
-          //           this.escape(
-          //             DriverUtils.buildColumnAlias(
-          //               this.connection.driver,
-          //               aliasName,
-          //               column!.databaseName,
-          //             ),
-          //           )
-          //         );
-          //       } else {
-          //         if (
-          //           this.expressionMap.selects.find(
-          //             select =>
-          //               select.selection === orderCriteria ||
-          //               select.aliasName === orderCriteria,
-          //           )
-          //         )
-          //           return this.escape(parentAlias) + '.' + orderCriteria;
-
-          //         return '';
-          //       }
-          //     })
-          //     .join(', ');
-
-          //   console.log('select string after first order by', selectString);
-          //   const orderByObject: OrderByCondition = {};
-          //   Object.keys(orderBys).forEach(orderCriteria => {
-          //     // if (orderCriteria.indexOf('(') !== -1) {
-          //     //   console.log('get here');
-          //     //   const betweenFirstParentheseAndComma = orderCriteria
-          //     //     .split('(')[1]
-          //     //     .split(',')[0];
-          //     //   const [
-          //     //     aliasName,
-          //     //     propertyPath,
-          //     //   ] = betweenFirstParentheseAndComma.split('.');
-          //     //   const alias = this.expressionMap.findAliasByName(aliasName);
-          //     //   const column = alias.metadata.findColumnWithPropertyName(
-          //     //     propertyPath,
-          //     //   );
-          //     //   orderByObject[`${aliasName}.${column.databaseName}`] =
-          //     //     orderBys[orderCriteria];
-          //     // } else
-          //     if (
-          //       orderCriteria.indexOf('.') !== -1 &&
-          //       orderCriteria.indexOf('(') === -1
-          //     ) {
-          //       const [aliasName, propertyPath] = orderCriteria.split('.');
-          //       const alias = this.expressionMap.findAliasByName(aliasName);
-          //       const column = alias.metadata.findColumnWithPropertyName(
-          //         propertyPath,
-          //       );
-          //       orderByObject[
-          //         this.escape(parentAlias) +
-          //           '.' +
-          //           this.escape(
-          //             DriverUtils.buildColumnAlias(
-          //               this.connection.driver,
-          //               aliasName,
-          //               column!.databaseName,
-          //             ),
-          //           )
-          //       ] = orderBys[orderCriteria];
-          //     } else {
-          //       if (
-          //         this.expressionMap.selects.find(
-          //           select =>
-          //             select.selection === orderCriteria ||
-          //             select.aliasName === orderCriteria,
-          //         )
-          //       ) {
-          //         orderByObject[
-          //           this.escape(parentAlias) + '.' + orderCriteria
-          //         ] = orderBys[orderCriteria];
-          //       } else {
-          //         orderByObject[orderCriteria] = orderBys[orderCriteria];
-          //       }
-          //     }
-          //   });
-
-          //   console.log(selectString, orderByObject);
-          //   return [selectString, orderByObject];
-          // },
         },
       );
     }
