@@ -464,12 +464,12 @@ export default abstract class ApiCrud<
     if (preValidator) {
       if (preValidator.constructor.name === 'AsyncFunction')
         try {
-          await preValidator.call(this);
+          await preValidator();
         } catch (error) {
           throw error;
         }
 
-      preValidator.call(this);
+      preValidator();
     }
 
     if (this.triggerOnPreValidation && validateOptions.triggerContext) {
@@ -486,12 +486,12 @@ export default abstract class ApiCrud<
     if (postValidator) {
       if (postValidator.constructor.name === 'AsyncFunction') {
         try {
-          await postValidator.call(this, entity);
+          await postValidator(entity);
         } catch (error) {
           throw error;
         }
       } else {
-        postValidator.call(this, entity);
+        postValidator(entity);
       }
     }
   }
@@ -947,7 +947,6 @@ export default abstract class ApiCrud<
     };
 
     if (Array.isArray(this.options.relations)) {
-      //TODO handle include statement
       this.options.relations.forEach(({ prop, alias, nestedRelation }) => {
         if (exclude && exclude.includes(alias)) return;
 

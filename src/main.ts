@@ -8,18 +8,25 @@ import {
 } from '@nestjs/common';
 import * as Sentry from '@sentry/node';
 import * as config from 'config';
-import * as cluster from 'cluster';
-import { SentryInterceptor } from './common/interceptors/sentry.interceptor';
 import { sentryConfig } from './config/sentry.config';
 import { RolesGuard } from './common/guards/roles.guard';
-import { SeedsService } from './seeds/seeds.service';
+import {
+  ReXUWSAdapter,
+  IReXUWSNestApplication,
+} from 'rexuws-nestjs-http-adapter';
+import { middlewares, getLoggerInstance } from 'rexuws';
 
 const serverConfig = config.get('server');
 
 async function bootstrap() {
   const logger = new Logger('BOOTSTRAPTING');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<IReXUWSNestApplication>(
+    AppModule,
+    new ReXUWSAdapter(),
+  );
   const reflector = app.get<Reflector>(Reflector);
+
+  app.use(middlewares.httpLogger(getLoggerInstance()));
 
   app.enableCors();
 
@@ -40,7 +47,7 @@ async function bootstrap() {
 
   app.useGlobalInterceptors(new ClassSerializerInterceptor(reflector));
 
-  // app.useGlobalGuards(new RolesGuard(reflector));
+  app.useGlobalGuards(new RolesGuard(reflector));
 
   // app.useGlobalInterceptors(new SentryInterceptor());
 
@@ -48,7 +55,7 @@ async function bootstrap() {
 
   Sentry.init(sentryConfig);
   const port = process.env.PORT || serverConfig.port;
-  await app.listen(port, '0.0.0.0');
+  await app.listen(3000);
   logger.log(`Listening on ${port}`);
 }
 
